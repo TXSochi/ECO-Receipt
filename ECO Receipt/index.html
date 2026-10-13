@@ -109,7 +109,6 @@
     #dropzone.is-drag { border-color: rgba(158, 221, 166, .9); background-color: rgba(158, 221, 166, .12); }
     .is-busy #dropzone { cursor: progress; }
     .is-busy #acc-btn { opacity: .55; cursor: not-allowed; }
-    .is-busy #mode-tabs { opacity: .55; pointer-events: none; }
     .scan {
       position: absolute; left: 0; right: 0; top: 0; height: 72px; pointer-events: none;
       background: linear-gradient(180deg, rgba(158, 221, 166, 0) 0%, rgba(158, 221, 166, .28) 44%, rgba(225, 247, 220, .95) 50%, rgba(158, 221, 166, .28) 56%, rgba(158, 221, 166, 0) 100%);
@@ -170,16 +169,6 @@
 
           <!-- ============ VIEW 1: Form unggah ============ -->
           <div id="view-upload">
-            <!-- Toggle mode: Live AI (default) / Dev & Demo -->
-            <div data-anim class="mb-4">
-              <div id="mode-tabs" role="group" data-i18n-aria="modeAria" aria-label="Mode aplikasi"
-                class="relative grid h-11 grid-cols-2 rounded-full border border-white/20 bg-white/10 p-1 text-[0.8125rem] font-semibold backdrop-blur-md">
-                <span id="mode-knob" class="lang-knob absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full" aria-hidden="true"></span>
-                <button type="button" data-mode="live" aria-pressed="true" data-i18n="modeLive" class="mode-opt lang-opt relative rounded-full"></button>
-                <button type="button" data-mode="dev" aria-pressed="false" data-i18n="modeDev" class="mode-opt lang-opt relative rounded-full"></button>
-              </div>
-            </div>
-
             <div data-anim>
               <div id="dropzone" role="button" tabindex="0" data-i18n-aria="dzAria" aria-label="Unggah foto struk"
                 class="relative flex h-[200px] cursor-pointer select-none items-center justify-center overflow-hidden rounded-[1.75rem] border border-dashed border-white/30 bg-white/[0.06] text-center transition-colors duration-300 hover:border-white/45 hover:bg-white/[0.09]">
@@ -214,7 +203,7 @@
             </div>
 
             <!-- Accordion API key -->
-            <div id="dev-box" data-anim hidden class="mt-4 overflow-hidden rounded-[1.25rem] border border-white/[0.14] bg-white/[0.05]">
+            <div data-anim class="mt-4 rounded-[1.25rem] border border-white/[0.14] bg-white/[0.05]">
               <button id="acc-btn" type="button" aria-expanded="false" aria-controls="acc-panel" class="flex w-full items-center gap-3 rounded-[1.25rem] px-4 py-3.5 text-left">
                 <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-leaf-200" aria-hidden="true">
                   <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
@@ -348,11 +337,6 @@
        KONFIGURASI
        ========================================================= */
     const CONFIG = {
-      // >>> TEMPEL KUNCI API GEMINI DI SINI <<<
-      // Diisi sekali, lalu Mode Live AI langsung berfungsi untuk semua pengunjung tanpa kolom input.
-      // Buat kunci di https://aistudio.google.com/apikey. Karena kunci terlihat di browser, batasi
-      // di Google Cloud Console (HTTP referrers ke domain deploy) dan pasang batas kuota.
-      GEMINI_API_KEY: 'AIzaSyAzrVO3VldRwrphSIqJdwTXIuch-qRApFQ',
       // Catatan: gemini-1.5-flash sudah dimatikan Google (Sep 2025) dan selalu membalas 404.
       // Model dicoba berurutan; jika satu tidak ditemukan, otomatis lanjut ke berikutnya.
       MODELS: ['gemini-3.5-flash', 'gemini-flash-latest'],
@@ -405,9 +389,6 @@ Skema JSON:
         dzHint: 'JPG, PNG, atau WEBP, maksimal 10 MB',
         dzChange: 'Ganti foto',
         dzRemove: 'Hapus foto',
-        modeAria: 'Mode aplikasi',
-        modeLive: 'Live AI (Public Mode)',
-        modeDev: 'Dev / Demo Mode',
         apiTitle: 'Kunci API Gemini',
         apiOptional: '(opsional)',
         apiActive: 'Terpasang',
@@ -425,7 +406,6 @@ Skema JSON:
         errType: 'Format file tidak didukung. Gunakan foto JPG, PNG, atau WEBP.',
         errSize: 'Ukuran foto lebih dari 10 MB. Pilih foto yang lebih kecil.',
         errNoImage: 'Pilih foto struk terlebih dahulu untuk dianalisis Gemini.',
-        errNoLiveKey: 'Mode Live AI belum aktif: kunci API belum dipasang di CONFIG.GEMINI_API_KEY. Beralih ke Dev / Demo Mode untuk mencoba.',
         errNetwork: 'Tidak dapat terhubung ke Gemini. Periksa koneksi internet, lalu coba lagi.',
         errApi: 'Gemini menolak permintaan ({msg}). Periksa kunci API, lalu coba lagi.',
         errParse: 'Barang pada struk tidak terbaca. Foto ulang dengan cahaya cukup dan pastikan seluruh struk terlihat.',
@@ -463,9 +443,6 @@ Skema JSON:
         dzHint: 'JPG, PNG or WEBP, up to 10 MB',
         dzChange: 'Change photo',
         dzRemove: 'Remove photo',
-        modeAria: 'App mode',
-        modeLive: 'Live AI (Public Mode)',
-        modeDev: 'Dev / Demo Mode',
         apiTitle: 'Gemini API key',
         apiOptional: '(optional)',
         apiActive: 'Added',
@@ -483,7 +460,6 @@ Skema JSON:
         errType: 'Unsupported file. Use a JPG, PNG or WEBP photo.',
         errSize: 'This photo is over 10 MB. Choose a smaller one.',
         errNoImage: 'Choose a receipt photo first so Gemini can analyze it.',
-        errNoLiveKey: 'Live AI mode is not active: no API key set in CONFIG.GEMINI_API_KEY. Switch to Dev / Demo Mode to try it out.',
         errNetwork: 'Can’t reach Gemini. Check your internet connection and try again.',
         errApi: 'Gemini rejected the request ({msg}). Check your API key and try again.',
         errParse: 'No items could be read. Retake the photo in good light with the whole receipt in frame.',
@@ -578,10 +554,9 @@ Skema JSON:
       itemsToggle: $('#items-toggle'), itemsToggleText: $('#items-toggle-text'), itemsToggleIcon: $('#items-toggle-icon'),
       tips: $('#tips'), back: $('#back-btn'),
       sr: $('#sr-status'), video: $('#bg-video'),
-      modeKnob: $('#mode-knob'), modeOpts: $$('.mode-opt'), devBox: $('#dev-box'),
     };
 
-    const state = { lang: 'id', mode: 'live', image: null, result: null, isDemo: false, busy: false, error: null, dragging: false, itemsOpen: false };
+    const state = { lang: 'id', image: null, result: null, isDemo: false, busy: false, error: null, dragging: false, itemsOpen: false };
     const TOP_ITEMS = 5; // barang teratas yang langsung terlihat
 
     const t = (key, vars) => {
@@ -746,42 +721,13 @@ Skema JSON:
       }
     }
 
-    function paintMode(animate) {
-      const dev = state.mode === 'dev';
-      gsap.to(el.modeKnob, { x: dev ? el.modeKnob.offsetWidth : 0, duration: animate ? T(0.5) : 0, ease: 'back.out(1.6)' });
-      el.modeOpts.forEach((o) => {
-        const on = o.dataset.mode === state.mode;
-        o.setAttribute('aria-pressed', String(on));
-        gsap.to(o, { color: on ? '#062012' : 'rgba(244, 251, 245, 0.72)', duration: animate ? T(0.3) : 0 });
-      });
-    }
-
-    function setMode(mode) {
-      if (state.mode === mode || state.busy) return;
-      state.mode = mode;
-      clearError();
-      paintMode(true);
-      updateModeNote();
-      gsap.killTweensOf(el.devBox);
-      if (mode === 'dev') {
-        el.devBox.hidden = false;
-        gsap.fromTo(el.devBox, { height: 0, autoAlpha: 0 }, {
-          height: 'auto', autoAlpha: 1, duration: T(0.45), ease: 'power3.out',
-          onComplete: () => { if (el.accBtn.getAttribute('aria-expanded') !== 'true') toggleAccordion(); },
-        });
-      } else {
-        gsap.to(el.devBox, { height: 0, autoAlpha: 0, duration: T(0.35), ease: 'power3.inOut', onComplete: () => { el.devBox.hidden = true; } });
-      }
-      announce(t(mode === 'live' ? 'modeLive' : 'modeDev'));
-    }
-
     function updateModeNote() {
-      const hasKey = Boolean(el.apiKey.value.trim());
-      el.modeNote.textContent = t(state.mode === 'live' || hasKey ? 'noteLive' : 'noteDemo');
-      el.apiOptional.hidden = hasKey;
-      if (el.apiPill.hidden === hasKey) {
-        el.apiPill.hidden = !hasKey;
-        if (hasKey) gsap.fromTo(el.apiPill, { autoAlpha: 0, scale: 0.8 }, { autoAlpha: 1, scale: 1, duration: T(0.35), ease: 'back.out(2)' });
+      const live = Boolean(el.apiKey.value.trim());
+      el.modeNote.textContent = t(live ? 'noteLive' : 'noteDemo');
+      el.apiOptional.hidden = live;
+      if (el.apiPill.hidden === live) {
+        el.apiPill.hidden = !live;
+        if (live) gsap.fromTo(el.apiPill, { autoAlpha: 0, scale: 0.8 }, { autoAlpha: 1, scale: 1, duration: T(0.35), ease: 'back.out(2)' });
       }
     }
 
@@ -827,7 +773,6 @@ Skema JSON:
       el.analyze.setAttribute('aria-busy', String(on));
       el.accBtn.disabled = on;
       el.apiKey.disabled = on;
-      el.modeOpts.forEach((b) => { b.disabled = on; });
       el.dz.setAttribute('aria-disabled', String(on));
       el.viewUpload.classList.toggle('is-busy', on);
     }
@@ -1148,10 +1093,8 @@ Skema JSON:
        ========================================================= */
     async function analyze() {
       if (state.busy) return;
-      const live = state.mode === 'live';
-      const key = live ? CONFIG.GEMINI_API_KEY.trim() : el.apiKey.value.trim();
+      const key = el.apiKey.value.trim();
       clearError();
-      if (live && !key) { showError('errNoLiveKey', null, el.analyze); return; }
       if (key && !state.image) { showError('errNoImage', null, el.dz); return; }
 
       state.busy = true;
@@ -1234,7 +1177,6 @@ Skema JSON:
       }
       applyI18n();
       paintToggle(false);
-      paintMode(false);
       gsap.set(el.scan, { autoAlpha: 0 });
       gsap.set('.btn-shine', { xPercent: -130 });
 
@@ -1254,9 +1196,6 @@ Skema JSON:
       el.dz.addEventListener('dragleave', (e) => { if (!el.dz.contains(e.relatedTarget)) setDrag(false); });
       el.dz.addEventListener('drop', (e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer?.files?.[0]); });
       ['dragover', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => e.preventDefault()));
-
-      // Mode
-      el.modeOpts.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
       // API key
       el.accBtn.addEventListener('click', toggleAccordion);
