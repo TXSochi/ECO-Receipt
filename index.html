@@ -1,0 +1,1743 @@
+<!doctype html>
+<html lang="en" class="preload">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#06140C" />
+  <meta name="description" content="Eco-Receipt: lacak jejak karbon belanjaan dari foto struk dengan AI." />
+  <title>Eco-Receipt — Jejak karbon dari struk belanja</title>
+
+  <!-- Fonts: Fraunces (heading, organik & elegan) + DM Sans (body, bersih) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..700&family=Fraunces:opsz,wght@9..144,400..600&display=swap" />
+
+  <!-- Tailwind (Play CDN, versi dipatok) -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['Fraunces', 'Georgia', 'serif'],
+            sans: ['"DM Sans"', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
+          },
+          colors: {
+            canopy: '#06140C',   // bayangan hutan, dasar overlay
+            moss: '#0E2619',     // tint kaca
+            leaf: { 200: '#C9EEC6', 300: '#9EDDA6', 400: '#7FD08A', 600: '#3E9B5C' },
+            sun: '#EADF9C',      // cahaya matahari di sela daun
+            ember: '#F0B35A',    // emisi tinggi / peringatan
+            mist: '#F4FBF5',     // teks utama
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    :root { color-scheme: dark; }
+    html { background: #0B2416; }
+    body { -webkit-tap-highlight-color: transparent; }
+    [hidden] { display: none !important; }
+    .preload #card { visibility: hidden; }
+
+    /* ---------- Latar: blur placeholder -> video -> scrim ---------- */
+    .bg-lqip {
+      position: fixed; inset: -48px; z-index: -30;
+      background: #0B2416 url("data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgMDA4MDhAQEBAQEBMSExQUFBMTExMUFBQVFRUZGRkVFRUUFBUVGBgZGRscGxoaGRocHB4eHiQkIiIqKiszMz7/xAB1AAEBAQEBAAAAAAAAAAAAAAAFBgMEAQEAAgMBAAAAAAAAAAAAAAAAAgEDAAQFEAACAAUCBAQFBQEAAAAAAAABAgAhAxIRMQRBIlGRcWETMnI0gTMj0bGyFAVSEQEBAAIDAQAAAAAAAAAAAAABAAIRMVFxQf/AABEIABcAKAMBIgACEQADEQD/2gAMAwEAAhEDEQA/ACt9Qa7ZU3s/NunYMlM6IGB5AxEsjTWHaX9fcj06lIbdkAA5cqwVQc5njI4ZOuIjK1TO72Kmo5ARmuLEkXHhPA9vCGdpuxQYln9STjm4ZQ9xpGB+HcO5vdENRA4U8HODlVbqTkD6ziV3QFoKYdABK9iJy1zLy8oY3W6NrWkYZFvzO7CDA7wHUq3JzsgJt5cjIYNkiWkpRjREa0purvRqKxIAYMoOZeA0nnUzlE3FLVtuqqwGCrEYOcG3x6icA2r1joY5aJlRbwilu7bgbFAutIA9xMhM6wgzVKNMENcjDAIGM5BEwxzBH+n87W8B/GF6vydH6RG8HlW6DumKGk6IcqLWxzyHUHHfjHG9b8a4pqFX/iXfIyT11jyp9xPgP7xgfst4mA1ONZ1N2ouXovnxjgtXqY1Oo+H9YziWd//Z") center / cover no-repeat;
+      filter: blur(24px) saturate(1.15);
+    }
+    #bg-video { opacity: 0; }
+    .scrim {
+      background-image: radial-gradient(120% 95% at 50% 45%, rgba(6, 20, 12, .18) 0%, rgba(6, 20, 12, .48) 70%, rgba(6, 20, 12, .62) 100%);
+    }
+    /* Ruang aman tepi layar; kartu tidak pernah lebih tinggi dari layar sehingga selalu di tengah */
+    .safe-pad {
+      --py: max(1.25rem, env(safe-area-inset-top), env(safe-area-inset-bottom));
+      padding: var(--py) max(1rem, env(safe-area-inset-right)) var(--py) max(1rem, env(safe-area-inset-left));
+    }
+    @media (min-width: 640px) {
+      .safe-pad {
+        --py: max(2.5rem, env(safe-area-inset-top), env(safe-area-inset-bottom));
+        padding-left: max(1.5rem, env(safe-area-inset-left)); padding-right: max(1.5rem, env(safe-area-inset-right));
+      }
+    }
+    .card-max { max-height: calc(100vh - 2 * var(--py)); max-height: calc(100svh - 2 * var(--py)); }
+
+    /* ---------- Kaca ---------- */
+    .glass.glass {
+      box-shadow: 0 40px 100px -30px rgba(2, 10, 6, .7), inset 0 1px 0 rgba(255, 255, 255, .28);
+    }
+    .glass::before { /* pantulan cahaya di permukaan kaca */
+      content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: linear-gradient(150deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .05) 30%, rgba(255, 255, 255, 0) 55%);
+    }
+    .lift { text-shadow: 0 1px 2px rgba(2, 10, 6, .35); }
+    .wl-lang[aria-pressed="true"], .demo-opt[aria-pressed="true"] { background: #C2EDBE; border-color: #C2EDBE; color: #062012; text-shadow: none; }
+    #welcome-skip:checked + .wl-check { background: #93D79B; border-color: #93D79B; }
+    #welcome-skip:checked + .wl-check svg { opacity: 1; }
+    #welcome-skip:focus-visible + .wl-check { outline: 2px solid rgba(255, 255, 255, .75); outline-offset: 2px; }
+
+    /* ---------- Kaca yang berubah warna sesuai tingkat karbon ---------- */
+    @property --ang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+    @keyframes ring-spin { to { --ang: 360deg; } }
+    #card {
+      --t1: 127, 208, 138; --t2: 201, 238, 198; --t3: 62, 155, 92; --glow: 127, 208, 138; --cbg: 14, 38, 25; --ring: 0; --ang: 0deg;
+      background-color: rgba(var(--cbg), .4);
+    }
+    #card.glass.glass {
+      box-shadow: 0 40px 100px -30px rgba(2, 10, 6, .7), 0 0 calc(80px * var(--ring)) -10px rgba(var(--glow), calc(.5 * var(--ring))), inset 0 1px 0 rgba(255, 255, 255, .28);
+    }
+    #card::after { /* cincin cahaya yang berputar di tepi kaca */
+      content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none; opacity: var(--ring);
+      background: conic-gradient(from var(--ang), rgba(var(--t1), .95), rgba(var(--t2), .3) 25%, rgba(var(--t3), .95) 50%, rgba(var(--t2), .3) 75%, rgba(var(--t1), .95));
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+      animation: ring-spin 6s linear infinite;
+    }
+    @media (prefers-reduced-motion: reduce) { #card::after { animation: none; } }
+    #sound-btn[aria-pressed="false"] { color: rgba(244, 251, 245, .55); } /* ikon speaker redup saat dibisukan */
+    .num { font-variant-numeric: tabular-nums lining-nums; }
+
+    /* ---------- Tombol ---------- */
+    .btn-primary {
+      --g: 0;
+      color: #062012; text-shadow: none;
+      background: linear-gradient(180deg, #C2EDBE 0%, #93D79B 48%, #74C585 100%);
+      box-shadow:
+        0 calc(14px + 8px * var(--g)) calc(34px + 14px * var(--g)) -14px rgba(127, 208, 138, calc(.5 + .4 * var(--g))),
+        inset 0 1px 0 rgba(255, 255, 255, .7);
+    }
+    .btn-ghost {
+      --g: 0;
+      background: rgba(255, 255, 255, calc(.08 + .06 * var(--g)));
+      border: 1px solid rgba(255, 255, 255, calc(.18 + .12 * var(--g)));
+      box-shadow: 0 12px 30px -18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .18);
+    }
+    .btn-primary:disabled { cursor: progress; }
+    .btn-shine {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .6) 50%, transparent 65%);
+      transform: translateX(-130%);
+    }
+    .btn-ghost .btn-shine { background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .14) 50%, transparent 65%); }
+
+    .lang-knob {
+      background: linear-gradient(180deg, #B4E6B2 0%, #7FCB8B 100%);
+      box-shadow: 0 4px 12px -4px rgba(62, 155, 92, .8), inset 0 1px 0 rgba(255, 255, 255, .6);
+    }
+    .lang-opt { text-shadow: none; }
+
+    /* ---------- Area unggah ---------- */
+    #dropzone.is-drag { border-color: rgba(158, 221, 166, .9); background-color: rgba(158, 221, 166, .12); }
+    .is-busy #dropzone { cursor: progress; }
+    .is-busy #acc-btn { opacity: .55; cursor: not-allowed; }
+    .is-busy #mode-tabs { opacity: .55; pointer-events: none; }
+    .scan {
+      position: absolute; left: 0; right: 0; top: 0; height: 72px; pointer-events: none;
+      background: linear-gradient(180deg, rgba(158, 221, 166, 0) 0%, rgba(158, 221, 166, .28) 44%, rgba(225, 247, 220, .95) 50%, rgba(158, 221, 166, .28) 56%, rgba(158, 221, 166, 0) 100%);
+    }
+
+    /* ---------- Area konten bergulir di dalam kartu ---------- */
+    #stage {
+      --ft: 0px; --fb: 0px;
+      scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent;
+      -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--ft), #000 calc(100% - var(--fb)), transparent 100%);
+              mask-image: linear-gradient(180deg, transparent 0, #000 var(--ft), #000 calc(100% - var(--fb)), transparent 100%);
+    }
+    #stage::-webkit-scrollbar { width: 6px; }
+    #stage::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .22); border-radius: 99px; }
+
+    :focus-visible { outline: 2px solid #C9EEC6; outline-offset: 3px; }
+    #dropzone:focus-visible { outline-offset: 4px; }
+    #api-key:focus-visible { outline: none; }
+  </style>
+</head>
+
+<body class="min-h-screen font-sans text-mist antialiased selection:bg-leaf-300/40">
+  <!-- Latar video (layer paling belakang) -->
+  <div class="bg-lqip" aria-hidden="true"></div>
+  <video id="bg-video" class="fixed inset-0 -z-20 h-full w-full object-cover" autoplay loop muted playsinline preload="auto" aria-hidden="true" tabindex="-1">
+    <source src="bg.mp4" type="video/mp4" />
+  </video>
+  <div class="scrim pointer-events-none fixed inset-0 -z-10 bg-canopy/25" aria-hidden="true"></div>
+  <canvas id="fx" class="pointer-events-none fixed inset-0 -z-[5] h-full w-full" aria-hidden="true"></canvas>
+
+  <main class="safe-pad flex min-h-[100svh] items-center justify-center">
+    <!-- Kartu utama -->
+    <section id="card" aria-labelledby="app-title"
+      class="glass lift card-max relative flex w-full max-w-[440px] flex-col rounded-[2.5rem] border border-white/20 bg-moss/40 backdrop-blur-2xl backdrop-saturate-150">
+      <div class="relative flex min-h-0 flex-1 flex-col px-6 pb-5 pt-6 sm:px-9 sm:pb-7 sm:pt-8">
+
+        <!-- Header -->
+        <header class="flex-none">
+          <div class="flex items-center justify-between">
+            <span data-intro class="grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-white/10 text-leaf-200" aria-hidden="true">
+              <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+            </span>
+
+            <div class="flex items-center gap-2">
+            <button id="sound-btn" data-intro type="button" aria-pressed="true" class="grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-white/10 text-leaf-200 backdrop-blur-md transition-colors hover:bg-white/20">
+              <svg id="snd-on" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+              <svg id="snd-off" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>
+            </button>
+            <button id="lang-toggle" data-intro type="button" data-i18n-aria="langAria" aria-label="Ganti bahasa"
+              class="relative grid h-9 w-[84px] grid-cols-2 rounded-full border border-white/20 bg-white/10 p-1 text-xs font-semibold tracking-wide backdrop-blur-md">
+              <span id="lang-knob" class="lang-knob absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full" aria-hidden="true"></span>
+              <span class="lang-opt relative grid place-items-center" data-lang="id" aria-hidden="true">ID</span>
+              <span class="lang-opt relative grid place-items-center" data-lang="en" aria-hidden="true">EN</span>
+            </button>
+            </div>
+          </div>
+
+          <div class="mt-6 text-center sm:mt-7">
+            <h1 id="app-title" data-intro class="font-serif text-[2.125rem] font-medium leading-[1.1] tracking-[-0.015em] sm:text-[2.375rem]">Eco-Receipt</h1>
+            <p data-intro class="mx-auto mt-2.5 max-w-[32ch] text-balance text-[0.9375rem] leading-relaxed text-mist/75" data-i18n="tagline"></p>
+          </div>
+        </header>
+
+        <div id="stage" class="-mx-2 mt-6 min-h-0 overflow-y-auto overscroll-contain px-2 pb-2 pt-2">
+
+          <!-- ============ VIEW 1: Form unggah ============ -->
+          <div id="view-upload">
+            <!-- Toggle mode: Live AI (default) / Dev & Demo -->
+            <div data-anim class="mb-4">
+              <div id="mode-tabs" role="group" data-i18n-aria="modeAria" aria-label="Mode aplikasi"
+                class="relative grid h-11 grid-cols-2 rounded-full border border-white/20 bg-white/10 p-1 text-[0.8125rem] font-semibold backdrop-blur-md">
+                <span id="mode-knob" class="lang-knob absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full" aria-hidden="true"></span>
+                <button type="button" data-mode="live" aria-pressed="true" data-i18n="modeLive" class="mode-opt lang-opt relative rounded-full"></button>
+                <button type="button" data-mode="dev" aria-pressed="false" data-i18n="modeDev" class="mode-opt lang-opt relative rounded-full"></button>
+              </div>
+            </div>
+
+            <div data-anim>
+              <div id="dropzone" role="button" tabindex="0" data-i18n-aria="dzAria" aria-label="Unggah foto struk"
+                class="relative flex h-[200px] cursor-pointer select-none items-center justify-center overflow-hidden rounded-[1.75rem] border border-dashed border-white/30 bg-white/[0.06] text-center transition-colors duration-300 hover:border-white/45 hover:bg-white/[0.09]">
+                <div id="dz-empty" class="pointer-events-none flex flex-col items-center px-6">
+                  <span class="grid h-14 w-14 place-items-center rounded-[1.1rem] border border-white/15 bg-white/10 text-leaf-200">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>
+                  </span>
+                  <p class="mt-4 text-[0.9375rem] font-medium" data-i18n="dzTitle"></p>
+                  <p class="mt-1 text-sm text-mist/70" data-i18n="dzSub"></p>
+                  <p class="mt-3 text-xs text-mist/60" data-i18n="dzHint"></p>
+                </div>
+
+                <div id="dz-preview" class="absolute inset-0" hidden>
+                  <img id="dz-img" alt="" class="h-full w-full object-cover object-top" />
+                  <div class="absolute inset-0 bg-gradient-to-t from-canopy/95 from-5% via-canopy/55 via-35% to-transparent to-70%"></div>
+                  <div id="scan" class="scan" aria-hidden="true"></div>
+                  <div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-left">
+                    <div class="min-w-0">
+                      <p id="dz-name" class="truncate text-sm font-medium"></p>
+                      <p id="dz-size" class="num mt-0.5 text-xs text-mist/70"></p>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2">
+                      <button id="dz-change" type="button" class="h-8 rounded-full border border-white/20 bg-white/15 px-3.5 text-xs font-medium backdrop-blur-md transition-colors hover:bg-white/25" data-i18n="dzChange"></button>
+                      <button id="dz-remove" type="button" data-i18n-aria="dzRemove" aria-label="Hapus foto" class="grid h-8 w-8 place-items-center rounded-full border border-white/20 bg-white/15 backdrop-blur-md transition-colors hover:bg-white/25">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <input id="file-input" type="file" accept="image/*" class="sr-only" tabindex="-1" aria-hidden="true" />
+              <input id="camera-input" type="file" accept="image/*" capture="environment" class="sr-only" tabindex="-1" aria-hidden="true" />
+
+              <!-- Dua pilihan: galeri atau kamera langsung -->
+              <div class="mt-3 grid grid-cols-2 gap-3">
+                <button id="btn-gallery" type="button" class="pick-btn flex min-h-[3.5rem] flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center text-[0.8125rem] font-medium leading-tight text-mist backdrop-blur-md transition-colors hover:border-white/35 hover:bg-white/[0.17] disabled:cursor-not-allowed disabled:opacity-50">
+                  <svg class="h-5 w-5 text-leaf-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <span data-i18n="pickGallery"></span>
+                </button>
+                <button id="btn-camera" type="button" class="pick-btn flex min-h-[3.5rem] flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center text-[0.8125rem] font-medium leading-tight text-mist backdrop-blur-md transition-colors hover:border-white/35 hover:bg-white/[0.17] disabled:cursor-not-allowed disabled:opacity-50">
+                  <svg class="h-5 w-5 text-leaf-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                  <span data-i18n="pickCamera"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Accordion API key -->
+            <div id="dev-box" data-anim hidden class="mt-4 overflow-hidden rounded-[1.25rem] border border-white/[0.14] bg-white/[0.05]">
+              <button id="acc-btn" type="button" aria-expanded="false" aria-controls="acc-panel" class="flex w-full items-center gap-3 rounded-[1.25rem] px-4 py-3.5 text-left">
+                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-leaf-200" aria-hidden="true">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+                </span>
+                <span class="min-w-0 flex-1 text-sm font-medium">
+                  <span data-i18n="apiTitle"></span>
+                  <span id="api-optional" class="font-normal text-mist/60" data-i18n="apiOptional"></span>
+                </span>
+                <span id="api-pill" class="rounded-full bg-leaf-300/20 px-2.5 py-1 text-[0.6875rem] font-semibold text-leaf-200" data-i18n="apiActive" hidden></span>
+                <svg id="acc-chevron" class="h-4 w-4 shrink-0 text-mist/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div id="acc-panel" class="overflow-hidden" hidden>
+                <div class="px-4 pb-4">
+                  <label for="api-key" class="sr-only" data-i18n="apiTitle"></label>
+                  <div class="relative">
+                    <input id="api-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" data-i18n-placeholder="apiPlaceholder"
+                      class="h-12 w-full rounded-2xl border border-white/15 bg-canopy/40 pl-4 pr-12 text-sm text-mist placeholder:text-mist/50 transition-colors focus:border-leaf-300/70 focus:bg-canopy/55 disabled:opacity-60" />
+                    <button id="api-eye" type="button" data-i18n-aria="apiShow" aria-label="Tampilkan kunci API"
+                      class="absolute right-1.5 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-xl text-mist/70 transition-colors hover:text-mist">
+                      <svg id="eye-on" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+                      <svg id="eye-off" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+                    </button>
+                  </div>
+                  <p class="mt-3 text-xs leading-relaxed text-mist/65">
+                    <span data-i18n="apiHelp"></span>
+                    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="font-medium text-leaf-200 underline decoration-leaf-200/40 underline-offset-2 transition-colors hover:decoration-leaf-200" data-i18n="apiLink"></a>
+                  </p>
+                </div>
+              </div>
+              <div id="demo-pick" class="border-t border-white/10 px-4 py-3.5">
+                <p class="text-xs font-medium text-mist/70" data-i18n="demoNext"></p>
+                <div class="mt-2.5 grid grid-cols-3 gap-2" role="group" data-i18n-aria="demoNext">
+                  <button type="button" data-demo="low" aria-pressed="true" class="demo-opt h-9 rounded-full border border-white/20 bg-white/10 px-2 text-xs font-semibold transition-colors" data-i18n="demoLow"></button>
+                  <button type="button" data-demo="mid" aria-pressed="false" class="demo-opt h-9 rounded-full border border-white/20 bg-white/10 px-2 text-xs font-semibold transition-colors" data-i18n="demoMid"></button>
+                  <button type="button" data-demo="high" aria-pressed="false" class="demo-opt h-9 rounded-full border border-white/20 bg-white/10 px-2 text-xs font-semibold transition-colors" data-i18n="demoHigh"></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tombol utama -->
+            <div data-anim class="mt-6">
+              <button id="analyze-btn" type="button" class="btn-primary relative flex h-14 w-full items-center justify-center overflow-hidden rounded-full text-base font-semibold">
+                <span class="btn-shine" aria-hidden="true"></span>
+                <span id="btn-label" class="relative flex items-center gap-2.5">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+                  <span data-i18n="analyze"></span>
+                </span>
+                <span id="btn-loading" class="invisible absolute inset-0 flex items-center justify-center gap-3 opacity-0" aria-hidden="true">
+                  <svg id="spinner" class="h-5 w-5" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="2.5"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+                  <span id="loading-text" data-i18n="phase1"></span>
+                </span>
+              </button>
+              <p id="mode-note" data-i18n-dyn class="mt-3 text-balance text-center text-xs text-mist/65"></p>
+            </div>
+
+            <div id="form-error" class="overflow-hidden" hidden>
+              <div class="pt-4">
+                <p role="alert" class="flex gap-2.5 rounded-2xl border border-ember/30 bg-ember/10 px-4 py-3 text-sm leading-relaxed text-[#FCE7C6]">
+                  <svg class="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                  <span id="form-error-text" data-i18n-dyn></span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ VIEW 2: Dashboard hasil ============ -->
+          <div id="view-result" hidden>
+            <div data-anim class="text-center">
+              <span id="demo-badge" class="mb-4 inline-flex items-center gap-1.5 rounded-full border border-sun/30 bg-sun/10 px-3 py-1 text-[0.6875rem] font-semibold text-sun" hidden>
+                <span class="h-1.5 w-1.5 rounded-full bg-sun" aria-hidden="true"></span>
+                <span data-i18n="demoBadge"></span>
+              </span>
+              <p id="total-label" tabindex="-1" class="text-sm text-mist/75 outline-none" data-i18n="totalLabel"></p>
+              <p class="mt-2 flex items-baseline justify-center gap-2">
+                <span id="total-value" class="num font-serif text-[3.5rem] font-normal leading-none tracking-[-0.03em] sm:text-[4.25rem]">0</span>
+                <span class="text-base font-medium text-mist/75">kg CO₂e</span>
+              </p>
+              <p id="equiv" data-i18n-dyn class="mt-3 text-balance text-sm leading-relaxed text-mist/70"></p>
+            </div>
+
+            <div data-anim class="mt-7">
+              <div class="flex items-end justify-between gap-4">
+                <div>
+                  <p class="text-sm font-medium" data-i18n="scoreTitle"></p>
+                  <p id="score-label" data-i18n-dyn class="mt-0.5 text-xs text-mist/65"></p>
+                </div>
+                <p class="leading-none"><span id="score-value" class="num font-serif text-[1.75rem]">0</span><span class="ml-0.5 text-sm text-mist/60">/100</span></p>
+              </div>
+              <div id="score-track" role="progressbar" aria-valuemin="1" aria-valuemax="100" aria-valuenow="0" data-i18n-aria="scoreTitle" class="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10">
+                <div id="score-bar" class="h-full rounded-full" style="width:0%"></div>
+              </div>
+            </div>
+
+            <div data-anim class="mt-7">
+              <p class="text-sm font-medium" data-i18n="itemsTitle"></p>
+              <p id="items-meta" data-i18n-dyn class="mt-0.5 text-xs text-mist/65"></p>
+              <ul id="item-list" data-i18n-dyn class="mt-3"></ul>
+              <div id="items-more-wrap" class="overflow-hidden" hidden>
+                <ul id="item-list-more" data-i18n-dyn></ul>
+              </div>
+              <button id="items-toggle" type="button" aria-expanded="false" aria-controls="items-more-wrap" data-i18n-dyn
+                class="mt-1 inline-flex items-center gap-1.5 rounded-full py-1.5 text-xs font-medium text-leaf-200 transition-colors hover:text-mist" hidden>
+                <span id="items-toggle-text"></span>
+                <svg id="items-toggle-icon" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+            </div>
+
+            <div data-anim class="mt-6 rounded-[1.5rem] border border-white/15 bg-white/[0.07] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+              <div class="flex items-center gap-2.5">
+                <span class="grid h-8 w-8 place-items-center rounded-full bg-leaf-300/15 text-leaf-200" aria-hidden="true">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></svg>
+                </span>
+                <p class="text-sm font-semibold" data-i18n="tipsTitle"></p>
+              </div>
+              <ul id="tips" data-i18n-dyn class="mt-3.5 space-y-2.5 text-[0.84375rem] leading-relaxed text-mist/85"></ul>
+            </div>
+
+            <div data-anim class="mt-6">
+              <button id="back-btn" type="button" class="btn-ghost relative flex h-[3.25rem] w-full items-center justify-center gap-2.5 overflow-hidden rounded-full text-[0.9375rem] font-medium">
+                <span class="btn-shine" aria-hidden="true"></span>
+                <svg class="relative h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                <span class="relative" data-i18n="back"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Popup sambutan: tampil sekali per browser (tambahkan ?welcome ke URL untuk menampilkannya lagi) -->
+  <div id="welcome" hidden class="safe-pad fixed inset-0 z-50 flex items-center justify-center bg-canopy/55 backdrop-blur-sm">
+    <div id="welcome-panel" role="dialog" aria-modal="true" aria-labelledby="welcome-title"
+      class="glass lift relative w-full max-w-[400px] rounded-[2rem] border border-white/20 bg-moss/50 p-6 backdrop-blur-2xl backdrop-saturate-150 sm:p-8">
+      <div class="relative">
+        <div class="flex items-center justify-between">
+        <span class="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-white/10 text-leaf-200">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+        </span>
+        <div class="flex gap-1.5" role="group" aria-label="Language / Bahasa">
+          <button type="button" data-lang="id" aria-pressed="false" class="wl-lang h-8 rounded-full border border-white/20 bg-white/10 px-3 text-xs font-semibold transition-colors">ID</button>
+          <button type="button" data-lang="en" aria-pressed="true" class="wl-lang h-8 rounded-full border border-white/20 bg-white/10 px-3 text-xs font-semibold transition-colors">EN</button>
+        </div>
+        </div>
+        <h2 id="welcome-title" class="font-serif mt-4 text-3xl leading-tight" data-i18n="welcomeTitle"></h2>
+        <div class="mt-5 space-y-4 text-sm leading-relaxed text-mist/85">
+          <div><p class="font-semibold text-mist" data-i18n="welcomeP1Title"></p><p class="mt-1" data-i18n="welcomeP1"></p></div>
+          <div><p class="font-semibold text-mist" data-i18n="welcomeP2Title"></p><p class="mt-1" data-i18n="welcomeP2"></p></div>
+        </div>
+        <label class="mt-6 flex cursor-pointer select-none items-center gap-3 text-sm text-mist/85">
+          <input id="welcome-skip" type="checkbox" class="sr-only" />
+          <span class="wl-check grid h-5 w-5 flex-none place-items-center rounded-md border border-white/30 bg-white/10 transition-colors"><svg class="h-3.5 w-3.5 opacity-0 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="#062012" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4.5 4.5L19 7"/></svg></span>
+          <span data-i18n="welcomeSkip"></span>
+        </label>
+        <button id="welcome-btn" type="button" class="btn-primary mt-5 h-12 w-full rounded-full text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70" data-i18n="welcomeBtn"></button>
+      </div>
+    </div>
+  </div>
+
+  <p id="sr-status" class="sr-only" role="status" aria-live="polite"></p>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    /* =========================================================
+       KONFIGURASI
+       ========================================================= */
+    const CONFIG = {
+      // Mode Live AI memanggil backend (server.js di Cloud Run) yang memakai service account,
+      // jadi tidak ada API key di halaman ini. Kosongkan PROXY_URL hanya jika ingin memanggil
+      // Gemini langsung dari browser dengan GEMINI_API_KEY (key akan terlihat publik).
+      PROXY_URL: '',
+      GEMINI_API_KEY: '',
+      // Catatan: gemini-1.5-flash sudah dimatikan Google (Sep 2025) dan selalu membalas 404.
+      // Model dicoba berurutan; jika satu tidak ditemukan, otomatis lanjut ke berikutnya.
+      MODELS: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-flash-latest'],
+      ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta/models',
+      MAX_FILE_MB: 10,
+      MAX_IMAGE_EDGE: 1600,   // px; foto diperkecil sebelum dikirim agar cepat & hemat kuota
+      JPEG_QUALITY: 0.85,
+      DEMO_DELAY: 2000,       // ms; durasi loading pada Mode Demo
+      SOUND_DEFAULT: true,    // efek suara aktif saat pertama dibuka (pengguna bisa mematikannya)
+      SOUND_VOLUME: 0.5,      // 0-1, volume utama efek suara
+      CAR_KG_PER_KM: 0.17,    // perkiraan emisi rata-rata mobil bensin per km
+    };
+
+    const SYSTEM_PROMPT = (lang) => `Kamu adalah analis jejak karbon untuk aplikasi Eco-Receipt. Pengguna mengirim foto struk belanja, umumnya dari toko, minimarket, atau pasar swalayan di Indonesia.
+
+Langkah kerja:
+1. Baca semua baris barang pada struk. Abaikan baris non-barang seperti subtotal, PPN/pajak, diskon, poin member, biaya layanan, metode pembayaran, dan kembalian.
+2. Untuk setiap barang, tentukan kategori produk lalu perkirakan jejak karbonnya dalam kg CO2e (siklus hidup dari produksi hingga rak toko). Gunakan faktor emisi yang lazim dipakai, misalnya Poore & Nemecek (2018) untuk pangan dan basis data DEFRA untuk produk non-pangan. Gunakan berat, volume, atau jumlah yang tertera; jika tidak tertera, perkirakan ukuran kemasan yang wajar di Indonesia.
+3. Beri "skor_hijau" 1–100 untuk keseluruhan belanja (100 = sangat rendah emisi). Timbang porsi barang beremisi tinggi (daging merah, produk susu, makanan ultra-proses, plastik sekali pakai) dibanding barang rendah emisi (sayur, buah, kacang-kacangan, tahu, tempe).
+4. Tulis 2–3 saran konkret dan realistis untuk konteks Indonesia yang merujuk barang spesifik pada struk ini. Setiap saran maksimal 25 kata.
+
+Aturan keluaran:
+- Balas HANYA dengan satu objek JSON valid, tanpa markdown, tanpa teks lain.
+- Tulis "kategori" dan "saran" dalam bahasa ${lang === 'en' ? 'Inggris' : 'Indonesia'}. Tulis "nama" sesuai struk, rapikan singkatan bila maknanya jelas.
+- Gunakan titik sebagai pemisah desimal, maksimal 2 angka di belakang koma.
+- Jika gambar bukan struk belanja atau tidak terbaca, balas {"error": "alasan singkat"}.
+
+Skema JSON:
+{
+  "toko": "nama toko, atau null",
+  "items": [
+    { "nama": "string", "jumlah": "mis. 2 pcs atau 500 g", "kategori": "string", "emisi_kg": 0.00 }
+  ],
+  "total_kg": 0.00,
+  "skor_hijau": 0,
+  "saran": ["string", "string"]
+}`;
+
+    /* =========================================================
+       TEKS ANTARMUKA (ID / EN)
+       ========================================================= */
+    const I18N = {
+      id: {
+        docTitle: 'Eco-Receipt — Jejak karbon dari struk belanja',
+        langAria: 'Bahasa Indonesia aktif. Ganti ke English',
+        tagline: 'Unggah foto struk belanja dan lihat jejak karbon setiap barangnya.',
+        dzAria: 'Unggah foto struk belanja',
+        dzTitle: 'Tarik foto struk ke sini',
+        dzSub: 'atau klik untuk memilih file',
+        dzTitleTouch: 'Ketuk untuk memilih foto struk',
+        dzSubTouch: 'atau pakai tombol kamera di bawah',
+        dzHint: 'JPG, PNG, atau WEBP, maksimal 10 MB',
+        dzChange: 'Ganti foto',
+        dzRemove: 'Hapus foto',
+        pickGallery: 'Unggah dari Galeri',
+        pickCamera: 'Buka Kamera / Foto Langsung',
+        welcomeTitle: 'Sebelum mulai',
+        welcomeP1Title: 'Masih prototipe',
+        welcomeP1: 'Eco-Receipt sedang dalam pengembangan. Angka emisi adalah estimasi AI, bukan pengukuran terverifikasi.',
+        welcomeP2Title: 'Soal foto yang kamu kirim',
+        welcomeP2: 'Foto struk yang kamu ambil dengan kamera atau unggah dari galeri dikirim ke Gemini API milik Google untuk dianalisis. Kami tidak membuat akun dan tidak menyimpan salinannya. Hindari struk yang memuat nama, nomor telepon, atau nomor kartu.',
+        welcomeBtn: 'Mengerti',
+        welcomeSkip: 'Jangan tampilkan lagi',
+        demoNext: 'Hasil demo berikutnya:',
+        soundMute: 'Matikan suara',
+        soundUnmute: 'Nyalakan suara',
+        demoLow: 'Karbon rendah',
+        demoMid: 'Sedang',
+        demoHigh: 'Karbon tinggi',
+        modeAria: 'Mode aplikasi',
+        modeLive: 'Live AI (Public Mode)',
+        modeDev: 'Dev / Demo Mode',
+        apiTitle: 'Kunci API Gemini',
+        apiOptional: '(opsional)',
+        apiActive: 'Terpasang',
+        apiPlaceholder: 'Tempel kunci API di sini',
+        apiShow: 'Tampilkan kunci API',
+        apiHide: 'Sembunyikan kunci API',
+        apiHelp: 'Kunci hanya dipakai di browser ini dan tidak disimpan. Kosongkan untuk mencoba Mode Demo.',
+        apiLink: 'Buat kunci di Google AI Studio',
+        analyze: 'Analisis Jejak Karbon',
+        phase1: 'Membaca struk…',
+        phase2: 'Menghitung emisi…',
+        phase3: 'Menyusun saran…',
+        noteDemo: 'Tanpa kunci API, aplikasi berjalan di Mode Demo.',
+        noteLive: 'Struk akan dianalisis oleh Gemini.',
+        errType: 'Format file tidak didukung. Gunakan foto JPG, PNG, atau WEBP.',
+        errSize: 'Ukuran foto lebih dari 10 MB. Pilih foto yang lebih kecil.',
+        errNoImage: 'Pilih foto struk terlebih dahulu untuk dianalisis Gemini.',
+        errNoLiveKey: 'Mode Live AI belum aktif: kunci API belum dipasang di CONFIG.GEMINI_API_KEY. Beralih ke Dev / Demo Mode untuk mencoba.',
+        errNetwork: 'Tidak dapat terhubung ke Gemini. Periksa koneksi internet, lalu coba lagi.',
+        errApi: 'Gemini menolak permintaan ({msg}). Periksa kunci API, lalu coba lagi.',
+        errBusy: 'Gemini sedang sibuk atau kuotanya sementara habis. Tunggu beberapa detik, lalu coba lagi.',
+        errParse: 'Barang pada struk tidak terbaca. Foto ulang dengan cahaya cukup dan pastikan seluruh struk terlihat.',
+        errNotReceipt: 'Gambar ini tidak terbaca sebagai struk belanja ({msg}). Coba foto struk lain.',
+        errBlocked: 'Gemini tidak dapat memproses gambar ini. Coba foto struk lain.',
+        errGeneric: 'Analisis gagal. Coba lagi dalam beberapa saat.',
+        demoBadge: 'Mode Demo: data contoh',
+        totalLabel: 'Total jejak karbon',
+        equiv: 'Setara berkendara ±{km} km dengan mobil bensin',
+        scoreTitle: 'Skor Hijau',
+        score1: 'Emisi tinggi',
+        score2: 'Perlu perbaikan',
+        score3: 'Cukup baik',
+        score4: 'Sangat ramah lingkungan',
+        itemsTitle: 'Rincian barang',
+        itemsMeta: '{n} barang, diurutkan dari emisi terbesar',
+        itemsMetaStore: '{n} barang dari {store}, diurutkan dari emisi terbesar',
+        shareSr: '{pct}% dari total',
+        itemsMore: 'Tampilkan {n} barang lainnya',
+        itemsLess: 'Tampilkan lebih sedikit',
+        tipsTitle: 'Saran dari AI',
+        tipFallback: 'Belum ada saran untuk struk ini.',
+        back: 'Kembali / Scan Lagi',
+        srResult: 'Analisis selesai. Total {total} kg CO2e, skor hijau {score} dari 100.',
+      },
+      en: {
+        docTitle: 'Eco-Receipt — Carbon footprint from your receipts',
+        langAria: 'English active. Switch to Bahasa Indonesia',
+        tagline: 'Upload a shopping receipt and see the carbon footprint of every item.',
+        dzAria: 'Upload a receipt photo',
+        dzTitle: 'Drop your receipt photo here',
+        dzSub: 'or click to choose a file',
+        dzTitleTouch: 'Tap to choose a receipt photo',
+        dzSubTouch: 'or use the camera button below',
+        dzHint: 'JPG, PNG or WEBP, up to 10 MB',
+        dzChange: 'Change photo',
+        dzRemove: 'Remove photo',
+        pickGallery: 'Upload from Gallery',
+        pickCamera: 'Open Camera / Take Photo',
+        welcomeTitle: 'Before you start',
+        welcomeP1Title: 'Still a prototype',
+        welcomeP1: 'Eco-Receipt is in development. Emission figures are AI estimates, not verified measurements.',
+        welcomeP2Title: 'About the photos you send',
+        welcomeP2: "Receipt photos you take with your camera or upload from your gallery are sent to Google's Gemini API for analysis. We don't create accounts or keep a copy. Avoid receipts showing names, phone numbers or card numbers.",
+        welcomeBtn: 'Got it',
+        welcomeSkip: "Don't show this again",
+        demoNext: 'Next demo result:',
+        soundMute: 'Mute sound',
+        soundUnmute: 'Turn sound on',
+        demoLow: 'Low carbon',
+        demoMid: 'Medium',
+        demoHigh: 'High carbon',
+        modeAria: 'App mode',
+        modeLive: 'Live AI (Public Mode)',
+        modeDev: 'Dev / Demo Mode',
+        apiTitle: 'Gemini API key',
+        apiOptional: '(optional)',
+        apiActive: 'Added',
+        apiPlaceholder: 'Paste your API key',
+        apiShow: 'Show API key',
+        apiHide: 'Hide API key',
+        apiHelp: 'Your key stays in this browser and is never saved. Leave it empty to try Demo mode.',
+        apiLink: 'Create a key in Google AI Studio',
+        analyze: 'Analyze Carbon Footprint',
+        phase1: 'Reading receipt…',
+        phase2: 'Calculating emissions…',
+        phase3: 'Writing suggestions…',
+        noteDemo: 'Without an API key, the app runs in Demo mode.',
+        noteLive: 'Your receipt will be analyzed by Gemini.',
+        errType: 'Unsupported file. Use a JPG, PNG or WEBP photo.',
+        errSize: 'This photo is over 10 MB. Choose a smaller one.',
+        errNoImage: 'Choose a receipt photo first so Gemini can analyze it.',
+        errNoLiveKey: 'Live AI mode is not active: no API key set in CONFIG.GEMINI_API_KEY. Switch to Dev / Demo Mode to try it out.',
+        errNetwork: 'Can’t reach Gemini. Check your internet connection and try again.',
+        errApi: 'Gemini rejected the request ({msg}). Check your API key and try again.',
+        errBusy: 'Gemini is busy or the quota is temporarily used up. Wait a few seconds and try again.',
+        errParse: 'No items could be read. Retake the photo in good light with the whole receipt in frame.',
+        errNotReceipt: 'This image doesn’t look like a shopping receipt ({msg}). Try another photo.',
+        errBlocked: 'Gemini can’t process this image. Try another receipt photo.',
+        errGeneric: 'Analysis failed. Try again in a moment.',
+        demoBadge: 'Demo mode: sample data',
+        totalLabel: 'Total carbon footprint',
+        equiv: 'About the same as driving {km} km in a petrol car',
+        scoreTitle: 'Green Score',
+        score1: 'High emissions',
+        score2: 'Room to improve',
+        score3: 'Fairly good',
+        score4: 'Very eco-friendly',
+        itemsTitle: 'Item breakdown',
+        itemsMeta: '{n} items, highest emissions first',
+        itemsMetaStore: '{n} items from {store}, highest emissions first',
+        shareSr: '{pct}% of total',
+        itemsMore: 'Show {n} more items',
+        itemsLess: 'Show fewer',
+        tipsTitle: 'AI suggestions',
+        tipFallback: 'No suggestions for this receipt yet.',
+        back: 'Back / Scan Again',
+        srResult: 'Analysis complete. Total {total} kg CO2e, green score {score} out of 100.',
+      },
+    };
+
+    /* =========================================================
+       DATA DEMO
+       ========================================================= */
+    const DEMO_CYCLE = ['low', 'mid', 'high'];
+    function advanceDemo() { // tiap scan demo: hijau -> kuning -> hitam-merah -> ulang dari hijau
+      state.demoShown = state.demoNext;
+      state.demoNext = DEMO_CYCLE[(DEMO_CYCLE.indexOf(state.demoNext) + 1) % DEMO_CYCLE.length];
+      paintDemo();
+    }
+    function paintDemo() { // tombol yang menyala = hasil demo untuk scan berikutnya
+      el.demoOpts.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.demo === state.demoNext)));
+    }
+
+    const DEMO_EXTRA = { // contoh Mode Demo untuk menguji efek hijau dan hitam-merah (kuning = data bawaan, skor 58)
+      low: (en) => ({
+        store: 'Pasar Tani Segar', score: 84,
+        rows: [
+          ['Tempe Segar', '500 g', en ? 'plant protein' : 'protein nabati', 0.9], ['Tahu Putih', '600 g', en ? 'plant protein' : 'protein nabati', 1.1],
+          ['Kacang Hijau', '500 g', en ? 'legumes' : 'kacang-kacangan', 0.6], ['Bayam & Kangkung', '4 ikat', en ? 'vegetables' : 'sayur', 0.5],
+          ['Tomat', '1 kg', en ? 'vegetables' : 'sayur', 1.4], ['Pisang Cavendish', '1 kg', en ? 'fruit' : 'buah', 0.86],
+          ['Beras Merah', '1 kg', en ? 'grains' : 'biji-bijian', 2.9],
+        ],
+        tips: en ? [
+          'Plant protein and vegetables dominate this basket. This is what low-carbon shopping looks like.',
+          'Rice is your largest item. Choose local rice and cook only what you need to cut waste.',
+          'Keep bringing your own bag and bottle to stay plastic-free.',
+        ] : [
+          'Protein nabati dan sayur mendominasi belanja ini. Inilah contoh belanja rendah karbon.',
+          'Beras adalah barang terbesarmu. Pilih beras lokal dan masak secukupnya agar tak ada yang terbuang.',
+          'Teruslah membawa tas dan botol sendiri agar bebas plastik.',
+        ],
+      }),
+      high: (en) => ({
+        store: 'Swalayan Mega Mart', score: 14,
+        rows: [
+          ['Daging Sapi Rendang', '1 kg', en ? 'red meat' : 'daging merah', 27.0], ['Keju Cheddar', '500 g', en ? 'dairy' : 'produk susu', 10.5],
+          ['Udang Beku', '500 g', en ? 'seafood' : 'seafood', 6.0], ['Minuman Kaleng', '12 kaleng', en ? 'packaged drinks' : 'minuman kemasan', 3.6],
+          ['Mi Instan', '10 pcs', en ? 'ultra-processed' : 'ultra-proses', 3.0], ['Mentega', '250 g', en ? 'dairy' : 'produk susu', 2.3],
+          ['Kantong Plastik', '5 pcs', en ? 'single-use plastic' : 'plastik sekali pakai', 0.15],
+        ],
+        tips: en ? [
+          'Beef and cheese make up most of this receipt. Swap one beef meal a week for tempeh or tofu.',
+          'Frozen shrimp has a high footprint. Choose local fish or chicken more often.',
+          'Buy drinks in refillable bottles instead of cans, and skip the plastic bags.',
+        ] : [
+          'Daging sapi dan keju menyumbang sebagian besar emisi. Ganti satu porsi daging sapi per minggu dengan tempe atau tahu.',
+          'Udang beku berjejak karbon tinggi. Pilih ikan atau ayam lokal lebih sering.',
+          'Beli minuman dalam botol isi ulang, bukan kaleng, dan tolak kantong plastik.',
+        ],
+      }),
+    };
+
+    function demoData(lang) {
+      const en = lang === 'en';
+      if (state.demoShown !== 'mid') {
+        const x = DEMO_EXTRA[state.demoShown](en);
+        const rows = x.rows.map(([name, qty, cat, kg]) => ({ name, detail: `${qty}, ${cat}`, kg }));
+        return { store: x.store, items: rows, total: rows.reduce((sum, it) => sum + it.kg, 0), score: x.score, tips: x.tips };
+      }
+      const items = [
+        ['Daging Sapi Slice', '250 g', en ? 'red meat' : 'daging merah', 12.5],
+        ['Beras Pandan Wangi', '1 kg', en ? 'grains' : 'biji-bijian', 4.2],
+        ['Telur Ayam Negeri', '10 butir', en ? 'eggs' : 'telur', 2.8],
+        ['Susu UHT Full Cream', '1 L', en ? 'dairy' : 'produk susu', 1.4],
+        ['Tahu Putih', '300 g', en ? 'plant protein' : 'protein nabati', 0.95],
+        ['Pisang Cavendish', '1 kg', en ? 'fruit' : 'buah', 0.86],
+        ['Air Mineral 1,5 L', '2 botol', en ? 'packaged drinks' : 'minuman kemasan', 0.3],
+        ['Bayam & Kangkung', '2 ikat', en ? 'vegetables' : 'sayur', 0.25],
+        ['Kantong Plastik', '1 pcs', en ? 'single-use plastic' : 'plastik sekali pakai', 0.03],
+      ].map(([name, qty, cat, kg]) => ({ name, detail: `${qty}, ${cat}`, kg }));
+
+      return {
+        store: 'Toko Sumber Segar',
+        items,
+        total: items.reduce((sum, it) => sum + it.kg, 0),
+        score: 58,
+        tips: en ? [
+          'Beef is over half of this receipt. Swap one serving a week for tempeh or tofu to save ±50 kg CO₂e a month.',
+          'Buy local, in-season produce at a nearby market: low emissions, less packaging.',
+          'Bring a tote bag and refillable bottle to drop plastic bags and bottled water.',
+        ] : [
+          'Daging sapi menyumbang lebih dari separuh emisi. Ganti satu porsi per minggu dengan tempe atau tahu untuk hemat ±50 kg CO₂e per bulan.',
+          'Belanja sayur dan buah lokal musiman di pasar terdekat: emisi rendah, kemasan minim.',
+          'Bawa tas belanja dan botol isi ulang agar kantong plastik dan air kemasan tak perlu dibeli.',
+        ],
+      };
+    }
+
+    /* =========================================================
+       UTILITAS & STATE
+       ========================================================= */
+    const $ = (sel, root = document) => root.querySelector(sel);
+    const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+    const mq = (q) => window.matchMedia(q).matches;
+    const RM = mq('(prefers-reduced-motion: reduce)');
+    const CAN_HOVER = mq('(hover: hover) and (pointer: fine)');
+    const IS_TOUCH = mq('(pointer: coarse)');
+    const T = (d) => (RM ? Math.min(d, 0.01) : d); // reduced motion: nyaris instan (hindari tween 0 detik)
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+    const shorten = (s, n = 120) => { const v = String(s).trim().replace(/\.$/, ''); return v.length > n ? `${v.slice(0, n - 1)}…` : v; };
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const appError = (i18nKey, vars) => Object.assign(new Error(i18nKey), { i18nKey, vars });
+
+    const el = {
+      card: $('#card'), stage: $('#stage'), viewUpload: $('#view-upload'), viewResult: $('#view-result'),
+      toggle: $('#lang-toggle'), knob: $('#lang-knob'), langOpts: $$('.lang-opt'),
+      dz: $('#dropzone'), dzEmpty: $('#dz-empty'), dzPreview: $('#dz-preview'), dzImg: $('#dz-img'),
+      dzName: $('#dz-name'), dzSize: $('#dz-size'), dzChange: $('#dz-change'), dzRemove: $('#dz-remove'),
+      scan: $('#scan'), file: $('#file-input'),
+      welcome: $('#welcome'), welcomePanel: $('#welcome-panel'), welcomeBtn: $('#welcome-btn'), welcomeSkip: $('#welcome-skip'), soundBtn: $('#sound-btn'), demoPick: $('#demo-pick'), demoOpts: $$('.demo-opt'),
+      camera: $('#camera-input'), pickBtns: $$('.pick-btn'), pickGallery: $('#btn-gallery'), pickCamera: $('#btn-camera'),
+      accBtn: $('#acc-btn'), accPanel: $('#acc-panel'), accChevron: $('#acc-chevron'), apiPill: $('#api-pill'), apiOptional: $('#api-optional'),
+      apiKey: $('#api-key'), apiEye: $('#api-eye'), eyeOn: $('#eye-on'), eyeOff: $('#eye-off'),
+      analyze: $('#analyze-btn'), btnLabel: $('#btn-label'), btnLoading: $('#btn-loading'),
+      spinner: $('#spinner'), loadingText: $('#loading-text'), modeNote: $('#mode-note'),
+      errWrap: $('#form-error'), errText: $('#form-error-text'),
+      demoBadge: $('#demo-badge'), totalLabel: $('#total-label'), total: $('#total-value'), equiv: $('#equiv'),
+      scoreValue: $('#score-value'), scoreLabel: $('#score-label'), scoreTrack: $('#score-track'), scoreBar: $('#score-bar'),
+      itemsMeta: $('#items-meta'), items: $('#item-list'), itemsMore: $('#item-list-more'), itemsMoreWrap: $('#items-more-wrap'),
+      itemsToggle: $('#items-toggle'), itemsToggleText: $('#items-toggle-text'), itemsToggleIcon: $('#items-toggle-icon'),
+      tips: $('#tips'), back: $('#back-btn'),
+      sr: $('#sr-status'), video: $('#bg-video'),
+      modeKnob: $('#mode-knob'), modeOpts: $$('.mode-opt'), devBox: $('#dev-box'),
+    };
+
+    const state = { lang: 'en', mode: 'live', demoShown: 'low', demoNext: 'low', image: null, result: null, isDemo: false, busy: false, error: null, dragging: false, itemsOpen: false };
+    const TOP_ITEMS = 5; // barang teratas yang langsung terlihat
+
+    const t = (key, vars) => {
+      const s = I18N[state.lang][key] ?? I18N.id[key] ?? key;
+      return vars ? s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '') : s;
+    };
+
+    const fmtCache = new Map();
+    const fmtNum = (n, digits = 1) => {
+      const loc = state.lang === 'en' ? 'en-US' : 'id-ID';
+      const key = `${loc}|${digits}`;
+      if (!fmtCache.has(key)) fmtCache.set(key, new Intl.NumberFormat(loc, { minimumFractionDigits: digits, maximumFractionDigits: digits }));
+      return fmtCache.get(key).format(n);
+    };
+    const kgDigits = (n) => (n < 10 ? 2 : 1);
+    const fmtSize = (b) => (b < 1048576 ? `${fmtNum(b / 1024, 0)} KB` : `${fmtNum(b / 1048576, 1)} MB`);
+
+    const announce = (msg) => { el.sr.textContent = ''; requestAnimationFrame(() => { el.sr.textContent = msg; }); };
+
+    /* =========================================================
+       BAHASA
+       ========================================================= */
+    function applyI18n() {
+      document.documentElement.lang = state.lang;
+      $$('.wl-lang').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === state.lang)));
+      document.title = t('docTitle');
+      $$('[data-i18n]').forEach((n) => { n.textContent = t(n.dataset.i18n); });
+      $$('[data-i18n-placeholder]').forEach((n) => { n.placeholder = t(n.dataset.i18nPlaceholder); });
+      $$('[data-i18n-aria]').forEach((n) => { n.setAttribute('aria-label', t(n.dataset.i18nAria)); });
+      updateModeNote();
+      sndPaintBtn();
+      if (state.error) el.errText.textContent = t(state.error.key, state.error.vars);
+      if (!el.viewResult.hidden) renderResult();
+    }
+
+    function paintToggle(animate) {
+      const en = state.lang === 'en';
+      gsap.to(el.knob, { x: en ? el.knob.offsetWidth : 0, duration: animate ? T(0.5) : 0, ease: 'back.out(1.6)' });
+      el.langOpts.forEach((o) => gsap.to(o, {
+        color: o.dataset.lang === state.lang ? '#062012' : 'rgba(244, 251, 245, 0.72)',
+        duration: animate ? T(0.3) : 0,
+      }));
+    }
+
+    function setLang(lang) {
+      if (lang === state.lang) return;
+      state.lang = lang;
+      paintToggle(true);
+      const nodes = [...$$('[data-i18n], [data-i18n-dyn]', el.card), ...$$('[data-i18n]', el.welcome)];
+      gsap.to(nodes, {
+        opacity: 0, duration: T(0.14), ease: 'power1.in', overwrite: 'auto',
+        onComplete: () => {
+          applyI18n();
+          gsap.to(nodes, { opacity: 1, duration: T(0.28), ease: 'power1.out' });
+        },
+      });
+    }
+
+    /* =========================================================
+       UNGGAH FOTO
+       ========================================================= */
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    // Perkecil & kompres ke JPEG: payload kecil, upload cepat, kuota hemat.
+    async function prepareImage(file) {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await loadImage(url);
+        const scale = Math.min(1, CONFIG.MAX_IMAGE_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.round(img.naturalWidth * scale);
+        const h = Math.round(img.naturalHeight * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', CONFIG.JPEG_QUALITY);
+        return { dataUrl, mime: 'image/jpeg', base64: dataUrl.split(',')[1] };
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    async function handleFile(file) {
+      if (!file || state.busy) return;
+      clearError();
+      if (!file.type.startsWith('image/')) return showError('errType', null, el.dz);
+      if (file.size > CONFIG.MAX_FILE_MB * 1048576) return showError('errSize', null, el.dz);
+      try {
+        state.image = await prepareImage(file);
+        showPreview(state.image.dataUrl, file.name, file.size);
+      } catch {
+        showError('errType', null, el.dz);
+      }
+    }
+
+    function showPreview(src, name, size) {
+      el.dzImg.src = src;
+      el.dzName.textContent = name;
+      el.dzSize.textContent = fmtSize(size);
+      setDropzoneButton(false); // tombol "Ganti" & "Hapus" yang mengambil alih
+      gsap.killTweensOf([el.dzEmpty, el.dzPreview]);
+      if (el.dzPreview.hidden) {
+        el.dzPreview.hidden = false;
+        gsap.timeline()
+          .to(el.dzEmpty, { autoAlpha: 0, scale: 0.96, duration: T(0.25), ease: 'power2.in' })
+          .fromTo(el.dzPreview, { autoAlpha: 0, scale: 1.04 }, { autoAlpha: 1, scale: 1, duration: T(0.6), ease: 'power3.out' }, `-=${T(0.1)}`);
+      } else {
+        gsap.fromTo(el.dzImg, { autoAlpha: 0.3 }, { autoAlpha: 1, duration: T(0.4), ease: 'power2.out' });
+      }
+    }
+
+    function setDropzoneButton(on) {
+      if (on) { el.dz.setAttribute('role', 'button'); el.dz.tabIndex = 0; }
+      else { el.dz.removeAttribute('role'); el.dz.tabIndex = -1; }
+    }
+
+    function clearPreview(animate = true) {
+      state.image = null;
+      setDropzoneButton(true);
+      gsap.killTweensOf([el.dzEmpty, el.dzPreview]);
+      const done = () => { el.dzPreview.hidden = true; el.dzImg.removeAttribute('src'); };
+      if (!animate) {
+        done();
+        gsap.set(el.dzEmpty, { autoAlpha: 1, scale: 1 });
+        return;
+      }
+      gsap.timeline({ onComplete: done })
+        .to(el.dzPreview, { autoAlpha: 0, scale: 1.03, duration: T(0.3), ease: 'power2.in' })
+        .to(el.dzEmpty, { autoAlpha: 1, scale: 1, duration: T(0.45), ease: 'power3.out' }, `-=${T(0.1)}`);
+    }
+
+    function setDrag(on) {
+      if (state.dragging === on) return;
+      state.dragging = on;
+      el.dz.classList.toggle('is-drag', on);
+      gsap.to(el.dz, { scale: on ? 1.02 : 1, duration: T(0.35), ease: on ? 'back.out(2)' : 'power3.out' });
+    }
+
+    /* =========================================================
+       ACCORDION API KEY
+       ========================================================= */
+    function toggleAccordion() {
+      const open = el.accBtn.getAttribute('aria-expanded') !== 'true';
+      el.accBtn.setAttribute('aria-expanded', String(open));
+      gsap.to(el.accChevron, { rotation: open ? 180 : 0, duration: T(0.35), ease: 'power2.out' });
+      gsap.killTweensOf(el.accPanel);
+      if (open) {
+        el.accPanel.hidden = false;
+        gsap.fromTo(el.accPanel, { height: 0, autoAlpha: 0 }, { height: 'auto', autoAlpha: 1, duration: T(0.45), ease: 'power3.out' });
+      } else {
+        gsap.to(el.accPanel, {
+          height: 0, autoAlpha: 0, duration: T(0.35), ease: 'power3.inOut',
+          onComplete: () => { el.accPanel.hidden = true; },
+        });
+      }
+    }
+
+    function paintMode(animate) {
+      const dev = state.mode === 'dev';
+      gsap.to(el.modeKnob, { x: dev ? el.modeKnob.offsetWidth : 0, duration: animate ? T(0.5) : 0, ease: 'back.out(1.6)' });
+      el.modeOpts.forEach((o) => {
+        const on = o.dataset.mode === state.mode;
+        o.setAttribute('aria-pressed', String(on));
+        gsap.to(o, { color: on ? '#062012' : 'rgba(244, 251, 245, 0.72)', duration: animate ? T(0.3) : 0 });
+      });
+    }
+
+    function setMode(mode) {
+      if (state.mode === mode || state.busy) return;
+      state.mode = mode;
+      clearError();
+      paintMode(true);
+      updateModeNote();
+      gsap.killTweensOf(el.devBox);
+      if (mode === 'dev') {
+        el.devBox.hidden = false;
+        gsap.fromTo(el.devBox, { height: 0, autoAlpha: 0 }, {
+          height: 'auto', autoAlpha: 1, duration: T(0.45), ease: 'power3.out',
+          onComplete: () => { if (el.accBtn.getAttribute('aria-expanded') !== 'true') toggleAccordion(); },
+        });
+      } else {
+        gsap.to(el.devBox, { height: 0, autoAlpha: 0, duration: T(0.35), ease: 'power3.inOut', onComplete: () => { el.devBox.hidden = true; } });
+      }
+      announce(t(mode === 'live' ? 'modeLive' : 'modeDev'));
+    }
+
+    function updateModeNote() {
+      const hasKey = Boolean(el.apiKey.value.trim());
+      el.modeNote.textContent = t(state.mode === 'live' || hasKey ? 'noteLive' : 'noteDemo');
+      el.apiOptional.hidden = hasKey;
+      el.demoPick.hidden = hasKey; // info siklus demo hanya relevan saat tanpa API key
+      paintDemo();
+      if (el.apiPill.hidden === hasKey) {
+        el.apiPill.hidden = !hasKey;
+        if (hasKey) gsap.fromTo(el.apiPill, { autoAlpha: 0, scale: 0.8 }, { autoAlpha: 1, scale: 1, duration: T(0.35), ease: 'back.out(2)' });
+      }
+    }
+
+    /* =========================================================
+       PESAN ERROR
+       ========================================================= */
+    function showError(key, vars, shakeTarget) {
+      state.error = { key, vars };
+      el.errText.textContent = t(key, vars);
+      gsap.killTweensOf(el.errWrap);
+      if (el.errWrap.hidden) {
+        el.errWrap.hidden = false;
+        gsap.set(el.errWrap, { height: 0, autoAlpha: 0 });
+      }
+      gsap.to(el.errWrap, {
+        height: 'auto', autoAlpha: 1, duration: T(0.4), ease: 'power3.out',
+        onComplete: () => el.stage.scrollTo({ top: el.stage.scrollHeight, behavior: RM ? 'auto' : 'smooth' }), // error = elemen terakhir
+      });
+      if (shakeTarget) gsap.fromTo(shakeTarget, { x: -10 }, { x: 0, duration: T(0.6), ease: 'elastic.out(1, 0.3)' });
+      announce(t(key, vars));
+    }
+
+    function clearError(instant = false) {
+      if (!state.error) return;
+      state.error = null;
+      gsap.killTweensOf(el.errWrap);
+      if (instant) { el.errWrap.hidden = true; return; }
+      gsap.to(el.errWrap, {
+        height: 0, autoAlpha: 0, duration: T(0.3), ease: 'power2.inOut',
+        onComplete: () => { el.errWrap.hidden = true; },
+      });
+    }
+
+    /* =========================================================
+       STATE LOADING
+       ========================================================= */
+    let spinTween = null;
+    let scanTween = null;
+    let phaseTimer = null;
+
+    function setBusyUI(on) {
+      el.analyze.disabled = on;
+      el.analyze.setAttribute('aria-busy', String(on));
+      el.accBtn.disabled = on;
+      el.apiKey.disabled = on;
+      el.modeOpts.forEach((b) => { b.disabled = on; });
+      el.pickBtns.forEach((b) => { b.disabled = on; });
+      el.demoOpts.forEach((b) => { b.disabled = on; });
+      el.dz.setAttribute('aria-disabled', String(on));
+      el.viewUpload.classList.toggle('is-busy', on);
+    }
+
+    function startPhases() {
+      let i = 1;
+      el.loadingText.dataset.i18n = 'phase1';
+      el.loadingText.textContent = t('phase1');
+      phaseTimer = setInterval(() => {
+        if (i >= 3) { clearInterval(phaseTimer); return; }
+        i += 1;
+        const key = `phase${i}`;
+        gsap.to(el.loadingText, {
+          autoAlpha: 0, y: -5, duration: T(0.18), ease: 'power1.in',
+          onComplete: () => {
+            el.loadingText.dataset.i18n = key;
+            el.loadingText.textContent = t(key);
+            gsap.fromTo(el.loadingText, { autoAlpha: 0, y: 5 }, { autoAlpha: 1, y: 0, duration: T(0.25), ease: 'power2.out' });
+          },
+        });
+      }, 720);
+    }
+
+    function startScan() {
+      if (!state.image || RM) return;
+      gsap.set(el.scan, { autoAlpha: 1 });
+      scanTween = gsap.fromTo(el.scan, { y: -36 }, { y: el.dz.clientHeight - 36, duration: 1.5, ease: 'sine.inOut', repeat: -1, yoyo: true });
+    }
+
+    function stopLoadingFx() {
+      spinTween?.kill();
+      scanTween?.kill();
+      clearInterval(phaseTimer);
+      gsap.to(el.scan, { autoAlpha: 0, duration: T(0.2) });
+    }
+
+    function setLoading(on) {
+      setBusyUI(on);
+      gsap.killTweensOf([el.btnLabel, el.btnLoading, el.loadingText]);
+      if (on) {
+        gsap.to(el.analyze, { '--g': 0, y: 0, duration: T(0.25) });
+        gsap.timeline()
+          .to(el.btnLabel, { autoAlpha: 0, y: -12, duration: T(0.22), ease: 'power2.in' })
+          .fromTo(el.btnLoading, { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: T(0.32), ease: 'power3.out' });
+        gsap.set(el.loadingText, { autoAlpha: 1, y: 0 });
+        spinTween = gsap.to(el.spinner, { rotation: 360, duration: 0.9, ease: 'none', repeat: -1, transformOrigin: '50% 50%' });
+        startPhases();
+        startScan();
+        announce(t('phase1'));
+      } else {
+        stopLoadingFx();
+        gsap.timeline()
+          .to(el.btnLoading, { autoAlpha: 0, y: -12, duration: T(0.2), ease: 'power2.in' })
+          .fromTo(el.btnLabel, { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: T(0.32), ease: 'power3.out' });
+      }
+    }
+
+    function resetButtonInstant() {
+      stopLoadingFx();
+      setBusyUI(false);
+      gsap.killTweensOf([el.btnLabel, el.btnLoading]);
+      gsap.set(el.btnLoading, { autoAlpha: 0, y: 0 });
+      gsap.set(el.btnLabel, { autoAlpha: 1, y: 0 });
+      gsap.set(el.spinner, { rotation: 0 });
+    }
+
+    /* =========================================================
+       GEMINI
+       ========================================================= */
+    function parseJSON(text) {
+      const clean = text.replace(/```(?:json)?/gi, '').trim();
+      const start = clean.indexOf('{');
+      const end = clean.lastIndexOf('}');
+      if (start < 0 || end < start) throw appError('errParse');
+      try { return JSON.parse(clean.slice(start, end + 1)); } catch { throw appError('errParse'); }
+    }
+
+    async function callGemini(apiKey, image) {
+      const body = JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT(state.lang) }] },
+        contents: [{
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType: image.mime, data: image.base64 } },
+            { text: 'Analisis struk belanja pada gambar ini dan balas sesuai skema JSON.' },
+          ],
+        }],
+        generationConfig: { responseMimeType: 'application/json' },
+      });
+
+      let lastMessage = '', busy = false;
+      // Dua putaran: jika semua model sibuk (503/429), tunggu sebentar lalu coba sekali lagi.
+      const queue = [...CONFIG.MODELS, 'WAIT', ...CONFIG.MODELS];
+      for (const model of queue) {
+        if (model === 'WAIT') { if (!busy) break; await new Promise((r) => setTimeout(r, 2500)); continue; }
+        let res;
+        try {
+          res = await fetch(apiKey ? `${CONFIG.ENDPOINT}/${model}:generateContent` : `${CONFIG.PROXY_URL}/${model}`, {
+            method: 'POST',
+            headers: apiKey ? { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey } : { 'Content-Type': 'application/json' },
+            body,
+          });
+        } catch {
+          throw appError('errNetwork');
+        }
+        const json = await res.json().catch(() => null);
+        if ([429, 500, 502, 503, 504].includes(res.status)) { busy = true; lastMessage = json?.error?.message || `HTTP ${res.status}`; continue; }
+        if (res.status === 404) { lastMessage = json?.error?.message || `${model} not found`; continue; }
+        if (!res.ok) throw appError('errApi', { msg: shorten(json?.error?.message || `HTTP ${res.status}`) });
+
+        const cand = json?.candidates?.[0];
+        const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
+        if (!text) {
+          console.warn('[Eco-Receipt] respons kosong dari', model, cand?.finishReason, json?.promptFeedback);
+          throw appError(json?.promptFeedback?.blockReason || cand?.finishReason === 'SAFETY' ? 'errBlocked' : 'errParse');
+        }
+        try { return parseJSON(text); } catch (e) {
+          console.warn('[Eco-Receipt] respons tidak bisa diurai dari', model, cand?.finishReason, text.slice(0, 400));
+          throw e;
+        }
+      }
+      throw appError(busy ? 'errBusy' : 'errApi', { msg: shorten(lastMessage) });
+    }
+
+    // Validasi & rapikan balasan AI. Total dihitung ulang dari item agar selalu konsisten dengan daftar.
+    function normalize(raw) {
+      if (!raw || typeof raw !== 'object') throw appError('errParse');
+      if (raw.error) throw appError('errNotReceipt', { msg: shorten(String(raw.error), 90) });
+      const items = (Array.isArray(raw.items) ? raw.items : [])
+        .map((it) => ({
+          name: String(it?.nama ?? '').trim(),
+          detail: [it?.jumlah, it?.kategori].map((v) => String(v ?? '').trim()).filter((v) => v && v !== 'null').join(', '),
+          kg: Math.max(0, Number(it?.emisi_kg) || 0),
+        }))
+        .filter((it) => it.name);
+      if (!items.length) throw appError('errParse');
+      const tips = (Array.isArray(raw.saran) ? raw.saran : [raw.saran])
+        .map((s) => String(s ?? '').trim()).filter((s) => s && s !== 'null').slice(0, 3);
+      const store = typeof raw.toko === 'string' && raw.toko.trim().toLowerCase() !== 'null' ? raw.toko.trim() : '';
+      return {
+        store,
+        items,
+        total: items.reduce((sum, it) => sum + it.kg, 0),
+        score: clamp(Math.round(Number(raw.skor_hijau) || 50), 1, 100),
+        tips,
+      };
+    }
+
+    /* =========================================================
+       DASHBOARD HASIL
+       ========================================================= */
+    const getData = () => (state.isDemo ? demoData(state.lang) : state.result);
+    const scoreLabel = (s) => t(s >= 75 ? 'score4' : s >= 55 ? 'score3' : s >= 35 ? 'score2' : 'score1');
+
+    function scoreColor(s) {
+      const stops = [[0, [240, 179, 90]], [50, [234, 223, 156]], [100, [127, 208, 138]]];
+      const [a, b] = s <= 50 ? [stops[0], stops[1]] : [stops[1], stops[2]];
+      const k = (s - a[0]) / (b[0] - a[0]);
+      return `rgb(${a[1].map((v, i) => Math.round(v + (b[1][i] - v) * k)).join(',')})`;
+    }
+
+    function itemRow(it, total, index) {
+      const share = total > 0 ? it.kg / total : 0;
+      const pct = Math.round(share * 100);
+      const color = share >= 0.3 ? '#F0B35A' : share >= 0.1 ? '#EADF9C' : '#9EDDA6';
+      return `<li class="${index ? 'border-t border-white/10 py-3' : 'pb-3'}">
+        <div class="flex items-baseline justify-between gap-4">
+          <p class="min-w-0 truncate text-sm font-medium">${esc(it.name)}</p>
+          <p class="num shrink-0 text-sm font-medium">${fmtNum(it.kg, 2)}<span class="ml-1 text-xs font-normal text-mist/60">kg</span></p>
+        </div>
+        <div class="mt-1.5 flex items-center gap-4">
+          <p class="min-w-0 flex-1 truncate text-xs text-mist/60">${esc(it.detail)}</p>
+          <span class="block h-1 w-20 shrink-0 overflow-hidden rounded-full bg-white/10" title="${pct}%" aria-hidden="true">
+            <span class="share-bar block h-full rounded-full" style="width:${Math.max(3, pct)}%;background:${color}"></span>
+          </span>
+          <span class="sr-only">${esc(t('shareSr', { pct }))}</span>
+        </div>
+      </li>`;
+    }
+
+    const tipRow = (s) => `<li class="flex gap-3"><span class="mt-[0.6em] h-1.5 w-1.5 shrink-0 rounded-full bg-leaf-300" aria-hidden="true"></span><span>${esc(s)}</span></li>`;
+
+    function renderResult() {
+      const d = getData();
+      if (!d) return;
+      const label = scoreLabel(d.score);
+      el.demoBadge.hidden = !state.isDemo;
+      el.total.textContent = fmtNum(d.total, kgDigits(d.total));
+      el.equiv.textContent = t('equiv', { km: fmtNum(Math.round(d.total / CONFIG.CAR_KG_PER_KM), 0) });
+      el.scoreValue.textContent = d.score;
+      el.scoreLabel.textContent = label;
+      el.scoreTrack.setAttribute('aria-valuenow', d.score);
+      el.scoreTrack.setAttribute('aria-valuetext', `${d.score}/100, ${label}`);
+      el.scoreBar.style.width = `${d.score}%`;
+      el.scoreBar.style.background = `linear-gradient(90deg, rgba(240,179,90,.85), ${scoreColor(d.score)})`;
+      el.itemsMeta.textContent = d.store
+        ? t('itemsMetaStore', { n: d.items.length, store: d.store })
+        : t('itemsMeta', { n: d.items.length });
+      const rows = [...d.items].sort((a, b) => b.kg - a.kg).map((it, i) => itemRow(it, d.total, i));
+      const extra = rows.length - TOP_ITEMS;
+      el.items.innerHTML = rows.slice(0, TOP_ITEMS).join('');
+      el.itemsMore.innerHTML = rows.slice(TOP_ITEMS).join('');
+      el.itemsToggle.hidden = extra <= 0;
+      el.itemsMoreWrap.hidden = extra <= 0 || !state.itemsOpen;
+      el.itemsToggle.setAttribute('aria-expanded', String(state.itemsOpen));
+      el.itemsToggleText.textContent = state.itemsOpen ? t('itemsLess') : t('itemsMore', { n: extra });
+      gsap.set(el.itemsToggleIcon, { rotation: state.itemsOpen ? 180 : 0 });
+      el.tips.innerHTML = (d.tips.length ? d.tips : [t('tipFallback')]).map(tipRow).join('');
+    }
+
+    function toggleItems() {
+      state.itemsOpen = !state.itemsOpen;
+      const open = state.itemsOpen;
+      const extra = el.itemsMore.children.length;
+      el.itemsToggle.setAttribute('aria-expanded', String(open));
+      el.itemsToggleText.textContent = open ? t('itemsLess') : t('itemsMore', { n: extra });
+      gsap.to(el.itemsToggleIcon, { rotation: open ? 180 : 0, duration: T(0.35), ease: 'power2.out' });
+      gsap.killTweensOf(el.itemsMoreWrap);
+      if (open) {
+        el.itemsMoreWrap.hidden = false;
+        gsap.fromTo(el.itemsMoreWrap, { height: 0, autoAlpha: 0 }, { height: 'auto', autoAlpha: 1, duration: T(0.5), ease: 'power3.out' });
+        gsap.from(el.itemsMore.children, { autoAlpha: 0, x: -8, duration: T(0.4), stagger: T(0.04), ease: 'power2.out', delay: T(0.1) });
+        gsap.fromTo($$('.share-bar', el.itemsMore), { scaleX: 0 }, { scaleX: 1, transformOrigin: '0% 50%', duration: T(0.8), stagger: T(0.04), ease: 'power3.out', delay: T(0.2) });
+      } else {
+        gsap.to(el.itemsMoreWrap, {
+          height: 0, autoAlpha: 0, duration: T(0.4), ease: 'power3.inOut',
+          onComplete: () => { el.itemsMoreWrap.hidden = true; },
+        });
+      }
+    }
+
+    // Gradasi pudar atas/bawah sebagai petunjuk ada konten yang bisa digulir.
+    function updateStageFade() {
+      const s = el.stage;
+      s.style.setProperty('--ft', s.scrollTop > 2 ? '24px' : '0px');
+      s.style.setProperty('--fb', s.scrollTop + s.clientHeight < s.scrollHeight - 2 ? '40px' : '0px');
+    }
+
+    /* =========================================================
+       TRANSISI ANTAR-VIEW (fade-out → tinggi kartu → stagger-in)
+       ========================================================= */
+    // Tinggi stage berikutnya = tinggi alami konten, dibatasi ruang maksimum kartu.
+    function targetStageHeight(currentH) {
+      const s = el.stage;
+      const prev = { height: s.style.height, flex: s.style.flex };
+      s.style.height = 'auto';
+      s.style.flex = 'none';
+      const natural = s.offsetHeight;
+      s.style.height = prev.height;
+      s.style.flex = prev.flex;
+      const room = parseFloat(getComputedStyle(el.card).maxHeight) - (el.card.offsetHeight - currentH);
+      return Number.isFinite(room) ? Math.min(natural, room) : natural;
+    }
+
+    function swapView(from, to, { before, enter, after } = {}) {
+      const outEls = $$(':scope > [data-anim]', from);
+      const inEls = $$(':scope > [data-anim]', to);
+      let h0 = 0;
+      const tl = gsap.timeline({ onComplete: () => { updateStageFade(); after?.(); } });
+      tl.to(outEls, { autoAlpha: 0, y: -14, duration: T(0.3), stagger: T(0.05), ease: 'power2.in' })
+        .add(() => {
+          h0 = el.stage.offsetHeight;
+          gsap.set(el.stage, { height: h0, overflow: 'hidden' });
+          from.hidden = true;
+          to.hidden = false;
+          el.stage.scrollTop = 0;
+          gsap.set(inEls, { autoAlpha: 0, y: 24 });
+          before?.();
+        })
+        .to(el.stage, { height: () => targetStageHeight(h0), duration: T(0.65), ease: 'power3.inOut' })
+        .set(el.stage, { clearProps: 'height,overflow' })
+        .add(updateStageFade)
+        .addLabel('in', `-=${T(0.3)}`)
+        .to(inEls, { autoAlpha: 1, y: 0, duration: T(0.7), stagger: T(0.08), ease: 'power3.out' }, 'in');
+      enter?.(tl);
+      return tl;
+    }
+
+    function showResults() {
+      renderResult();
+      const d = getData();
+      setTone(toneFor(d.score));
+      const digits = kgDigits(d.total);
+      swapView(el.viewUpload, el.viewResult, {
+        before: () => {
+          resetButtonInstant();
+          clearError(true);
+        },
+        enter: (tl) => {
+          const counter = { total: 0, score: 0 };
+          el.total.textContent = fmtNum(0, digits);
+          el.scoreValue.textContent = '0';
+          tl.to(counter, {
+            total: d.total, score: d.score, duration: T(1.6), ease: 'power3.out',
+            onUpdate: () => {
+              el.total.textContent = fmtNum(counter.total, digits);
+              el.scoreValue.textContent = Math.round(counter.score);
+            },
+          }, 'in+=0.1')
+            .fromTo(el.scoreBar, { width: '0%' }, { width: `${d.score}%`, duration: T(1.4), ease: 'power3.out' }, 'in+=0.3')
+            .from($$('li', el.items), { autoAlpha: 0, x: -10, duration: T(0.5), stagger: T(0.05), ease: 'power2.out' }, 'in+=0.35')
+            .fromTo($$('.share-bar', el.items), { scaleX: 0 }, { scaleX: 1, transformOrigin: '0% 50%', duration: T(0.9), stagger: T(0.05), ease: 'power3.out' }, 'in+=0.45');
+        },
+        after: () => {
+          state.busy = false;
+          el.totalLabel.focus({ preventScroll: true });
+          announce(t('srResult', { total: fmtNum(d.total, digits), score: d.score }));
+        },
+      });
+    }
+
+    function goBack() {
+      if (state.busy) return;
+      state.busy = true;
+      swapView(el.viewResult, el.viewUpload, {
+        before: () => { clearPreview(false); setTone('idle'); },
+        after: () => {
+          state.busy = false;
+          state.result = null;
+          state.isDemo = false;
+          state.itemsOpen = false;
+          el.dz.focus({ preventScroll: true });
+        },
+      });
+    }
+
+    /* =========================================================
+       ANALISIS
+       ========================================================= */
+    async function analyze() {
+      if (state.busy) return;
+      const live = state.mode === 'live';
+      const key = live ? CONFIG.GEMINI_API_KEY.trim() : el.apiKey.value.trim();
+      const viaProxy = live && !key && Boolean(CONFIG.PROXY_URL);
+      clearError();
+      
+      // Jika kunci API kosong dan proxy kosong, langsung otomatis pakai data dummy (Mode Demo)
+      if (!key && !viaProxy) {
+        state.busy = true;
+        setLoading(true);
+        await wait(CONFIG.DEMO_DELAY);
+        state.result = null;
+        state.isDemo = true;
+        advanceDemo();
+        showResults();
+        return;
+      }
+
+      if ((key || viaProxy) && !state.image) { showError('errNoImage', null, el.dz); return; }
+
+      state.busy = true;
+      state.itemsOpen = false;
+      setLoading(true);
+      try {
+        if (key || viaProxy) {
+          state.result = normalize(await callGemini(key, state.image));
+          state.isDemo = false;
+        } else {
+          await wait(CONFIG.DEMO_DELAY);
+          state.result = null;
+          state.isDemo = true;
+        }
+        showResults();
+      } catch (err) {
+        console.error('[Eco-Receipt]', err);
+        setLoading(false);
+        state.busy = false;
+        showError(err.i18nKey || 'errGeneric', err.vars, el.analyze);
+      }
+    }
+
+    /* =========================================================
+       INTERAKSI PREMIUM (hover & tekan)
+       ========================================================= */
+    function premiumHover(btn) {
+      if (!CAN_HOVER) return;
+      const shine = btn.querySelector('.btn-shine');
+      btn.addEventListener('mouseenter', () => {
+        if (btn.disabled) return;
+        gsap.to(btn, { '--g': 1, y: -2, duration: T(0.4), ease: 'power3.out' });
+        if (shine && !RM) gsap.fromTo(shine, { xPercent: -130 }, { xPercent: 130, duration: 0.95, ease: 'power2.inOut' });
+      });
+      btn.addEventListener('mouseleave', () => gsap.to(btn, { '--g': 0, y: 0, scale: 1, duration: T(0.45), ease: 'power3.out' }));
+    }
+
+    function pressFeedback(btn) {
+      btn.addEventListener('pointerdown', () => { if (!btn.disabled) gsap.to(btn, { scale: 0.975, duration: T(0.12), ease: 'power2.out' }); });
+      const release = () => gsap.to(btn, { scale: 1, duration: T(0.5), ease: 'elastic.out(1, 0.5)' });
+      btn.addEventListener('pointerup', release);
+      btn.addEventListener('pointercancel', release);
+    }
+
+    /* =========================================================
+       VIDEO LATAR
+       ========================================================= */
+    function initVideo() {
+      const v = el.video;
+      const reveal = () => gsap.to(v, { opacity: 1, duration: T(1.6), ease: 'power2.out' });
+      if (RM) v.pause();
+      if (v.readyState >= 2) reveal(); else v.addEventListener('loadeddata', reveal, { once: true });
+      document.addEventListener('visibilitychange', () => {
+        if (RM) return;
+        if (document.hidden) v.pause(); else v.play().catch(() => {});
+      });
+    }
+
+    /* =========================================================
+       ANIMASI PEMBUKA
+       ========================================================= */
+    /* =========================================================
+       EFEK ASAP / AWAN SESUAI TINGKAT KARBON
+       skor >= 75: asap hijau | 35-74: asap kuning | < 35: awan hitam-merah
+       ========================================================= */
+    const TONES = {
+      idle: { col: [127, 208, 138], a: 0, dark: 0, speed: 0.3, vig: 0, flash: 0, ring: 0, glow: [127, 208, 138], cbg: [14, 38, 25], t1: [127, 208, 138], t2: [201, 238, 198], t3: [62, 155, 92] },
+      low: { col: [104, 214, 146], a: 0.34, dark: 0, speed: 0.55, vig: 0, flash: 0, ring: 1, glow: [104, 214, 146], cbg: [12, 48, 30], t1: [92, 224, 138], t2: [201, 238, 198], t3: [46, 158, 91] },
+      mid: { col: [238, 198, 72], a: 0.34, dark: 0, speed: 0.8, vig: 0.06, flash: 0, ring: 1, glow: [240, 190, 60], cbg: [56, 46, 12], t1: [247, 212, 74], t2: [255, 242, 168], t3: [227, 160, 8] },
+      high: { col: [16, 13, 18], a: 0.7, dark: 1, speed: 1.1, vig: 0.38, flash: 1, ring: 1, glow: [214, 69, 64], cbg: [38, 10, 12], t1: [214, 69, 64], t2: [28, 10, 12], t3: [255, 107, 94] },
+    };
+    const toneFor = (s) => (s >= 75 ? 'low' : s >= 35 ? 'mid' : 'high'); // sama dengan label: >=75 hijau, 35-74 kuning, <35 hitam-merah
+    const cloneTone = (o) => JSON.parse(JSON.stringify(o));
+    const mixTone = (a, b, k) => {
+      const o = {};
+      Object.keys(b).forEach((key) => {
+        o[key] = Array.isArray(b[key]) ? b[key].map((v, i) => a[key][i] + (v - a[key][i]) * k) : a[key] + (b[key] - a[key]) * k;
+      });
+      return o;
+    };
+    const rgbStr = (c) => c.map(Math.round).join(',');
+    const fx = { cvs: null, ctx: null, W: 0, H: 0, puffs: [], cur: cloneTone(TONES.idle), mix: { k: 0 }, target: 'idle', running: false, last: 0, flashA: 0, flashX: 0, flashY: 0, nextFlash: 0 };
+
+    function sizeFx() { // resolusi setengah: asap memang lembut, jauh lebih ringan
+      fx.W = fx.cvs.width = Math.ceil(innerWidth * 0.5);
+      fx.H = fx.cvs.height = Math.ceil(innerHeight * 0.5);
+    }
+    function initFx() {
+      fx.cvs = $('#fx'); fx.ctx = fx.cvs.getContext('2d'); sizeFx();
+      const m = Math.min(fx.W, fx.H);
+      fx.puffs = Array.from({ length: IS_TOUCH ? 14 : 26 }, () => ({
+        x: Math.random() * fx.W, y: Math.random() * fx.H, r: m * (0.45 + Math.random() * 0.55), a: 0.55 + Math.random() * 0.45,
+        rise: 0.12 + Math.random() * 0.3, sway: 0.15 + Math.random() * 0.25, ph: Math.random() * 6.28, dx: 0.2 + Math.random() * 0.45, dy: (Math.random() - 0.5) * 0.08,
+      }));
+      addEventListener('resize', sizeFx);
+    }
+    function paintCard() {
+      const s = el.card.style, c = fx.cur;
+      s.setProperty('--t1', rgbStr(c.t1)); s.setProperty('--t2', rgbStr(c.t2)); s.setProperty('--t3', rgbStr(c.t3));
+      s.setProperty('--glow', rgbStr(c.glow)); s.setProperty('--cbg', rgbStr(c.cbg)); s.setProperty('--ring', c.ring.toFixed(3));
+    }
+    function drawFx(now) {
+      const { ctx, W, H, cur } = fx;
+      const dt = Math.min(50, now - (fx.last || now)) / 16.7; fx.last = now;
+      ctx.clearRect(0, 0, W, H);
+      if (cur.vig > 0.003) { ctx.fillStyle = `rgba(6,4,8,${cur.vig})`; ctx.fillRect(0, 0, W, H); }
+      const sp = cur.speed * (RM ? 0.25 : 1) * dt, c = rgbStr(cur.col), t = now / 1000;
+      for (const p of fx.puffs) {
+        p.x += ((1 - cur.dark) * Math.sin(t * 0.6 + p.ph) * p.sway + cur.dark * p.dx) * sp;
+        p.y += ((1 - cur.dark) * -p.rise + cur.dark * p.dy) * sp;
+        if (p.y < -p.r) p.y = H + p.r; else if (p.y > H + p.r) p.y = -p.r;
+        if (p.x > W + p.r) p.x = -p.r; else if (p.x < -p.r) p.x = W + p.r;
+        const yy = Math.min(1, Math.max(0, p.y / H));
+        const k = (1 - cur.dark) * (0.3 + 0.7 * yy) + cur.dark * (1 - 0.7 * yy); // asap menebal di bawah, awan badai di atas
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+        g.addColorStop(0, `rgba(${c},${cur.a * p.a * k})`); g.addColorStop(1, `rgba(${c},0)`);
+        ctx.fillStyle = g; ctx.fillRect(p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+      }
+      if (cur.flash > 0.5 && !RM && now > fx.nextFlash) { // kilat merah samar di awan
+        fx.flashA = 1; fx.flashX = Math.random() * W; fx.flashY = Math.random() * H * 0.4; fx.nextFlash = now + 3500 + Math.random() * 4500; sndThunder();
+      }
+      if (fx.flashA > 0.01) {
+        const g = ctx.createRadialGradient(fx.flashX, fx.flashY, 0, fx.flashX, fx.flashY, Math.max(W, H) * 0.6);
+        g.addColorStop(0, `rgba(214,69,64,${0.28 * fx.flashA})`); g.addColorStop(1, 'rgba(214,69,64,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); fx.flashA *= Math.pow(0.93, dt);
+      }
+      if (fx.target === 'idle' && cur.a < 0.004 && cur.vig < 0.004 && fx.flashA < 0.01) { ctx.clearRect(0, 0, W, H); fx.running = false; return; }
+      requestAnimationFrame(drawFx);
+    }
+    function setTone(name) {
+      const from = cloneTone(fx.cur), to = TONES[name];
+      fx.target = name;
+      sndEnsure(); sndTone(name);
+      if (name === 'high') fx.nextFlash = performance.now() + 1500;
+      gsap.killTweensOf(fx.mix); fx.mix.k = 0;
+      gsap.to(fx.mix, { k: 1, duration: T(1.8), ease: 'power2.inOut', onUpdate: () => { fx.cur = mixTone(from, to, fx.mix.k); paintCard(); } });
+      if (!fx.running) { fx.running = true; fx.last = 0; requestAnimationFrame(drawFx); }
+    }
+
+    /* =========================================================
+       EFEK SUARA (Web Audio, dibuat langsung di browser, tanpa file audio)
+       hijau: kicau burung + angin sejuk | kuning: drone tegang tapi tenang
+       hitam-merah: gemuruh asap, bara berderak, guntur jauh saat kilat
+       ========================================================= */
+    const SND = { ac: null, master: null, bus: {}, rev: null, white: null, brown: null, tone: 'low', on: CONFIG.SOUND_DEFAULT, timer: null, nextAt: 0 };
+    try { const v = localStorage.getItem('ecoreceipt.sound'); if (v) SND.on = v === 'on'; } catch (e) { /* abaikan */ }
+
+    function sndEnsure() {
+      if (SND.ac) { if (SND.ac.state === 'suspended' && SND.on && !document.hidden) SND.ac.resume(); return; }
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ac = (SND.ac = new AC());
+      SND.master = ac.createGain(); SND.master.gain.value = SND.on ? CONFIG.SOUND_VOLUME : 0; SND.master.connect(ac.destination);
+      const noise = (brown) => {
+        const b = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate), d = b.getChannelData(0); let l = 0;
+        for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + 0.02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; }
+        return b;
+      };
+      SND.white = noise(false); SND.brown = noise(true);
+      const len = Math.floor(ac.sampleRate * 1.8), ir = ac.createBuffer(2, len, ac.sampleRate); // gema ruang sederhana
+      for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5); }
+      SND.rev = ac.createConvolver(); SND.rev.buffer = ir; SND.rev.connect(SND.master);
+      ['low', 'mid', 'high'].forEach((k) => {
+        const g = ac.createGain(), send = ac.createGain(); g.gain.value = 0; send.gain.value = 0.3;
+        g.connect(SND.master); g.connect(send); send.connect(SND.rev); SND.bus[k] = g;
+      });
+      const lfo = (param, hz, depth) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = hz; g.gain.value = depth; o.connect(g); g.connect(param); o.start(); };
+      const loop = (buf, type, freq, q, gain, dest, hz, depth) => {
+        const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+        s.buffer = buf; s.loop = true; f.type = type; f.frequency.value = freq; f.Q.value = q; g.gain.value = gain;
+        s.connect(f); f.connect(g); g.connect(dest); s.start(); if (hz) lfo(g.gain, hz, depth);
+      };
+      const tone = (type, freq, gain, dest, hz, depth) => {
+        const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = freq; g.gain.value = gain;
+        o.connect(g); g.connect(dest); o.start(); if (hz) lfo(g.gain, hz, depth);
+      };
+      loop(SND.white, 'bandpass', 900, 0.5, 0.05, SND.bus.low, 0.08, 0.03);                 // hijau: angin sejuk
+      tone('sine', 110, 0.1, SND.bus.mid); tone('sine', 111.6, 0.1, SND.bus.mid);          // kuning: dua nada berdekatan,
+      tone('triangle', 165, 0.05, SND.bus.mid, 0.15, 0.02);                                 // berdenyut pelan (tegang tapi tenang)
+      loop(SND.brown, 'lowpass', 300, 0.5, 0.15, SND.bus.mid, 0.05, 0.05);
+      loop(SND.brown, 'lowpass', 140, 0.7, 0.5, SND.bus.high, 0.07, 0.25);                  // hitam: gemuruh rendah
+      loop(SND.white, 'bandpass', 5200, 0.6, 0.025, SND.bus.high, 0.12, 0.012);             // desis asap
+      tone('triangle', 55, 0.12, SND.bus.high, 0.06, 0.05); tone('triangle', 58.3, 0.08, SND.bus.high);
+      sndTone(SND.tone);
+    }
+
+    function sndChirp(at, f0, f1, dur, vol, dest, pan) {
+      const ac = SND.ac, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f1, at + dur);
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      o.connect(g);
+      if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; g.connect(p); p.connect(dest); } else g.connect(dest);
+      o.start(at); o.stop(at + dur + 0.02);
+    }
+    function sndBird(at) {
+      const d = SND.bus.low, pan = Math.random() * 1.6 - 0.8, base = 2200 + Math.random() * 1800, k = Math.random();
+      if (k < 0.4) { const n = 2 + Math.floor(Math.random() * 3); for (let i = 0; i < n; i++) sndChirp(at + i * 0.13, base, base * 1.5, 0.09, 0.22, d, pan); }
+      else if (k < 0.75) { const n = 7 + Math.floor(Math.random() * 6); for (let i = 0; i < n; i++) sndChirp(at + i * 0.055, base * 1.1, base * 0.95, 0.035, 0.16 * (1 - i / (n + 2)), d, pan); }
+      else { sndChirp(at, base * 0.7, base * 1.1, 0.28, 0.2, d, pan); sndChirp(at + 0.3, base * 1.1, base * 0.8, 0.32, 0.18, d, pan); }
+    }
+    function sndPulse(at) { // denyut rendah yang lembut
+      [[0, 0.5], [0.28, 0.3]].forEach(([dt, v]) => {
+        const ac = SND.ac, o = ac.createOscillator(), g = ac.createGain(), t = at + dt;
+        o.frequency.setValueAtTime(52, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+        o.connect(g); g.connect(SND.bus.mid); o.start(t); o.stop(t + 0.25);
+      });
+    }
+    function sndPing(at) { // denting tipis sesekali
+      const ac = SND.ac, o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 1320;
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.05, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + 2.5);
+      o.connect(g); g.connect(SND.bus.mid); o.start(at); o.stop(at + 2.6);
+    }
+    function sndCrackle(at) { // bara berderak
+      const ac = SND.ac, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), d = 0.004 + Math.random() * 0.012;
+      s.buffer = SND.white; f.type = 'bandpass'; f.frequency.value = 1200 + Math.random() * 3500; f.Q.value = 1.2;
+      g.gain.setValueAtTime(Math.random() < 0.08 ? 0.35 : 0.04 + Math.random() * 0.1, at); g.gain.exponentialRampToValueAtTime(0.0001, at + d);
+      s.connect(f); f.connect(g); g.connect(SND.bus.high); s.start(at, Math.random() * 2, d + 0.01);
+    }
+    function sndThunder() { // dipanggil saat kilat merah: guntur jauh menyusul
+      const ac = SND.ac;
+      if (!ac || !SND.on || SND.tone !== 'high' || ac.state !== 'running') return;
+      const at = ac.currentTime + 0.25, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+      s.buffer = SND.brown; s.loop = true; f.type = 'lowpass'; f.frequency.setValueAtTime(220, at); f.frequency.exponentialRampToValueAtTime(60, at + 2.6);
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.9, at + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, at + 3);
+      s.connect(f); f.connect(g); g.connect(SND.bus.high); s.start(at, Math.random() * 2); s.stop(at + 3.1);
+    }
+    function sndTick() {
+      const ac = SND.ac;
+      if (!ac || !SND.on || ac.state !== 'running') return;
+      const t = ac.currentTime; let guard = 0;
+      while (SND.nextAt < t + 0.25 && guard++ < 12) {
+        const at = Math.max(SND.nextAt, t + 0.02);
+        if (SND.tone === 'low') { sndBird(at); SND.nextAt = at + 0.9 + Math.random() * 2.6; }
+        else if (SND.tone === 'mid') { sndPulse(at); if (Math.random() < 0.12) sndPing(at + 0.35); SND.nextAt = at + 1.25; }
+        else if (SND.tone === 'high') { sndCrackle(at); SND.nextAt = at + 0.05 + Math.random() * 0.25; }
+        else break;
+      }
+    }
+    function sndTone(name) {
+      SND.tone = name === 'idle' ? 'low' : name; // beranda (belum scan) memakai suasana hijau: kicau burung + angin sejuk
+      SND.nextAt = 0;
+      if (!SND.ac) return;
+      Object.entries(SND.bus).forEach(([k, g]) => g.gain.setTargetAtTime(k === SND.tone ? 1 : 0, SND.ac.currentTime, 0.7)); // pindah suasana dengan crossfade
+      if (!SND.timer) SND.timer = setInterval(sndTick, 100);
+    }
+    function sndSet(on) {
+      SND.on = on;
+      try { localStorage.setItem('ecoreceipt.sound', on ? 'on' : 'off'); } catch (e) { /* abaikan */ }
+      if (on) sndEnsure();
+      if (SND.ac) SND.master.gain.setTargetAtTime(on ? CONFIG.SOUND_VOLUME : 0, SND.ac.currentTime, 0.12);
+      if (on) sndTone(SND.tone);
+      sndPaintBtn();
+    }
+    function sndPaintBtn() {
+      el.soundBtn.setAttribute('aria-pressed', String(SND.on));
+      el.soundBtn.setAttribute('aria-label', t(SND.on ? 'soundMute' : 'soundUnmute'));
+      $('#snd-on').toggleAttribute('hidden', !SND.on); $('#snd-off').toggleAttribute('hidden', SND.on); // SVG tidak punya properti .hidden, jadi pakai atribut
+    }
+
+    /* ---------- Popup sambutan (sekali per browser) ---------- */
+    const WELCOME_KEY = 'ecoreceipt.welcome.hide.v2'; // tersimpan hanya jika kotak dicentang
+    let welcomeReturnFocus = null;
+    function openWelcome() {
+      let hidden = false;
+      try { hidden = localStorage.getItem(WELCOME_KEY) === '1'; } catch (e) { /* storage diblokir: tampilkan saja */ }
+      if (hidden && !new URLSearchParams(location.search).has('welcome')) return;
+      el.welcomeSkip.checked = false;
+      welcomeReturnFocus = document.activeElement;
+      el.welcome.hidden = false;
+      el.card.inert = true; // fokus & klik hanya ke popup
+      gsap.fromTo(el.welcome, { autoAlpha: 0 }, { autoAlpha: 1, duration: T(0.35), ease: 'power2.out' });
+      gsap.fromTo(el.welcomePanel, { y: 24, scale: 0.96 }, { y: 0, scale: 1, duration: T(0.6), ease: 'expo.out', clearProps: 'transform' });
+      el.welcomeBtn.focus({ preventScroll: true });
+    }
+    function closeWelcome() {
+      if (el.welcomeSkip.checked) { try { localStorage.setItem(WELCOME_KEY, '1'); } catch (e) { /* abaikan */ } }
+      gsap.to(el.welcome, {
+        autoAlpha: 0, duration: T(0.25), ease: 'power2.in',
+        onComplete: () => {
+          el.welcome.hidden = true; el.card.inert = false;
+          if (welcomeReturnFocus && welcomeReturnFocus.focus) welcomeReturnFocus.focus({ preventScroll: true });
+        },
+      });
+    }
+
+    function intro() {
+      const bits = [...$$('[data-intro]', el.card), ...$$(':scope > [data-anim]', el.viewUpload)];
+      gsap.set(el.card, { autoAlpha: 0 });
+      document.documentElement.classList.remove('preload');
+      gsap.timeline({ delay: T(0.15) })
+        .fromTo(el.card,
+          { autoAlpha: 0, y: 56, scale: 0.94 },
+          { autoAlpha: 1, y: 0, scale: 1, duration: T(1.4), ease: 'expo.out', clearProps: 'transform' })
+        .from(bits, { autoAlpha: 0, y: 18, duration: T(0.9), stagger: T(0.07), ease: 'power3.out' }, `-=${T(1.05)}`)
+        .call(openWelcome, null, '+=0.25');
+    }
+
+    /* =========================================================
+       INIT
+       ========================================================= */
+    function init() {
+      if (IS_TOUCH) {
+        $('[data-i18n="dzTitle"]').dataset.i18n = 'dzTitleTouch';
+        $('[data-i18n="dzSub"]').dataset.i18n = 'dzSubTouch';
+      }
+      applyI18n();
+      paintToggle(false);
+      paintMode(false);
+      initFx();
+      gsap.set(el.scan, { autoAlpha: 0 });
+      gsap.set('.btn-shine', { xPercent: -130 });
+
+      // Bahasa
+      el.toggle.addEventListener('click', () => setLang(state.lang === 'id' ? 'en' : 'id'));
+
+      // Unggah: klik, keyboard, drag & drop
+      el.dz.addEventListener('click', (e) => { if (!state.busy && !e.target.closest('button')) el.file.click(); });
+      el.dz.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === el.dz) { e.preventDefault(); if (!state.busy) el.file.click(); }
+      });
+      el.file.addEventListener('change', () => { handleFile(el.file.files[0]); el.file.value = ''; });
+      // Kamera & galeri masuk ke fungsi yang sama (handleFile -> prepareImage -> preview -> scan -> analisis)
+      el.camera.addEventListener('change', () => { handleFile(el.camera.files[0]); el.camera.value = ''; });
+      el.pickGallery.addEventListener('click', () => { if (!state.busy) el.file.click(); });
+      el.pickCamera.addEventListener('click', () => { if (!state.busy) el.camera.click(); });
+      el.dzChange.addEventListener('click', () => { if (!state.busy) el.file.click(); });
+      el.dzRemove.addEventListener('click', () => { if (!state.busy) { clearPreview(true); el.dz.focus({ preventScroll: true }); } });
+      el.dz.addEventListener('dragenter', (e) => { e.preventDefault(); if (!state.busy) setDrag(true); });
+      el.dz.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = state.busy ? 'none' : 'copy'; });
+      el.dz.addEventListener('dragleave', (e) => { if (!el.dz.contains(e.relatedTarget)) setDrag(false); });
+      el.dz.addEventListener('drop', (e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer?.files?.[0]); });
+      ['dragover', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => e.preventDefault()));
+
+      // Mode
+      el.modeOpts.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+      // API key
+      el.accBtn.addEventListener('click', toggleAccordion);
+      el.apiKey.addEventListener('input', updateModeNote);
+      el.apiKey.addEventListener('keydown', (e) => { if (e.key === 'Enter') analyze(); });
+      el.apiEye.addEventListener('click', () => {
+        const show = el.apiKey.type === 'password';
+        el.apiKey.type = show ? 'text' : 'password';
+        el.eyeOn.toggleAttribute('hidden', show);
+        el.eyeOff.toggleAttribute('hidden', !show);
+        el.apiEye.dataset.i18nAria = show ? 'apiHide' : 'apiShow';
+        el.apiEye.setAttribute('aria-label', t(el.apiEye.dataset.i18nAria));
+      });
+
+      // Aksi utama
+      el.analyze.addEventListener('click', analyze);
+      el.back.addEventListener('click', goBack);
+      el.itemsToggle.addEventListener('click', toggleItems);
+      el.stage.addEventListener('scroll', updateStageFade, { passive: true });
+      if ('ResizeObserver' in window) {
+        const ro = new ResizeObserver(updateStageFade);
+        [el.stage, el.viewUpload, el.viewResult].forEach((n) => ro.observe(n));
+      }
+      [el.analyze, el.back].forEach((b) => { premiumHover(b); pressFeedback(b); });
+      pressFeedback(el.toggle);
+      el.pickBtns.forEach(pressFeedback);
+      pressFeedback(el.welcomeBtn);
+      pressFeedback(el.soundBtn);
+      el.soundBtn.addEventListener('click', () => sndSet(!SND.on));
+      ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, sndEnsure, { passive: true })); // izin autoplay: aktif setelah interaksi pertama
+      document.addEventListener('visibilitychange', () => { if (SND.ac) { if (document.hidden) SND.ac.suspend(); else if (SND.on) SND.ac.resume(); } });
+      sndPaintBtn();
+      el.demoOpts.forEach((b) => b.addEventListener('click', () => { state.demoNext = b.dataset.demo; paintDemo(); }));
+      $$('.wl-lang').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
+      el.welcomeBtn.addEventListener('click', closeWelcome);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.welcome.hidden) closeWelcome(); });
+
+      initVideo();
+      // Tunggu font siap (maks 800 ms) agar animasi pembuka tidak "loncat".
+      Promise.race([document.fonts?.ready, wait(800)]).then(intro);
+    }
+
+    if (!window.gsap) {
+      document.documentElement.classList.remove('preload');
+      console.error('[Eco-Receipt] GSAP gagal dimuat; periksa koneksi ke cdnjs.');
+      return;
+    }
+    init();
+  })();
+  </script>
+</body>
+</html>
