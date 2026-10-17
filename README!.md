@@ -24,7 +24,7 @@ Eco-Receipt takes a bottom-up approach to climate action. Instead of complex B2B
 
 ## ✨ Key Features
 
-* **Frictionless Web App:** No installation required, lightweight, and fully responsive across Mobile, Tablet, and Desktop. Also supports **PWA (Progressive Web App)** for home-screen installation.
+* **Frictionless Web App:** No installation required, lightweight, and fully responsive across Mobile, Tablet, and Desktop. 
 * **Vision AI Powered:** Uses Gemini's Multimodal capabilities to read varied receipts, filter non-product lines, categorize items, and calculate lifecycle emissions.
 * **Dynamic Visual & Audio Feedback:** The UI breathes. A high green score triggers a calming green atmosphere with generative audio, while a low score triggers a dark red interface with smoke particle effects.
 * **Smart Safeguards:** The AI is strictly prompted to reject non-receipt images to prevent hallucinations.
